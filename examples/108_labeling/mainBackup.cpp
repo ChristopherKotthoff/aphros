@@ -35,10 +35,11 @@ static int called_second_dump_ = 0;
 static int called_run_ = 0;
 static int called_main_ = 0;
 
+
 void Init(
     GRange<size_t> layers, Multi<FieldCell<Scal>>& fcu, std::string prefix,
     const Vars& var, M& m) {
-  // std::cout << "in init" << std::endl;
+  //std::cout << "in init" << std::endl;
   called_init_++;
   auto sem = m.GetSem();
   struct {
@@ -65,7 +66,7 @@ void Init(
 void Dump(
     const FieldCell<Scal>& fcu, std::string fieldname, std::string filename,
     M& m) {
-  // std::cout << "in first dump" << std::endl;
+  //std::cout << "in first dump" << std::endl;
   called_first_dump_++;
   auto sem = m.GetSem();
   const auto path = filename + ".h5";
@@ -80,7 +81,7 @@ void Dump(
 void Dump(
     GRange<size_t> layers, const Multi<FieldCell<Scal>>& fcu,
     std::string fieldname, std::string filename, M& m) {
-  // std::cout << "in second dump" << std::endl;
+  //std::cout << "in second dump" << std::endl;
   called_second_dump_++;
   auto sem = m.GetSem();
   for (auto l : layers) {
@@ -92,7 +93,7 @@ void Dump(
 }
 
 void Run(M& m, Vars& var) {
-  // std::cout << "in run" << std::endl;
+  //std::cout << "in run" << std::endl;
   called_run_++;
   auto sem = m.GetSem();
   struct {
@@ -125,99 +126,9 @@ void Run(M& m, Vars& var) {
     const bool reduce = true;
     const bool unionfind = false;
     const bool grid = false;
-    // UVof<M>().Recolor(
-    //     t.layers, t.fcvf, t.fccl, t.fccl, 0, Vect(0), 1e10, t.mebc, verbose,
-    //     unionfind, reduce, grid, m);
-
-    RecolorDistributed(
-         t.layers, t.fcvf, t.fccl, t.fccl, 0, Vect(0), 1e10, t.mebc, verbose,
-         unionfind, reduce, grid, m);
-
-    int mpi_rank_;
-    int mpi_size_;
-    MPI_Comm_rank(m.GetMpiComm(), &mpi_rank_);
-    MPI_Comm_size(m.GetMpiComm(), &mpi_size_);
-    
-    /* FieldCell<Scal> fc(m, 0);
-    std::cout << "block id=" << m.GetId() << std::endl;
-    const auto& index = m.GetIndexCells();
-    const auto& block = m.GetInBlockCells();
-    const MIdx start = block.GetBegin();
-    const MIdx size = block.GetSize();
-    const MIdx end = block.GetEnd();
-    std::cout << util::Format("start={} size={} end={}\n", start, size, end);
-    for (int iz = start[2]; iz < end[2]; ++iz) {
-      for (int iy = start[1]; iy < end[1]; ++iy) {
-        for (int ix = start[0]; ix < end[0]; ++ix) {
-          MIdx w(ix, iy, iz);
-          IdxCell c = index.GetIdx(w);
-          std::cout << w << ' ' << c.raw() << ' ' << fc[c] << std::endl;
-        }
-      }
-    }
-    for (auto c : m.Cells()) {
-      std::cout << "first m.Cells(): " << c.raw() << std::endl;
-      break;
-    }
-    for (auto c : m.AllCells()) {
-      std::cout << "first m.AllCells(): " << c.raw() << std::endl;
-      break;
-    }
-    std::cout << "inner: " << fc[index.GetIdx(MIdx(1, 2, 3))] << std::endl;
-    std::cout << "halo: " << fc[index.GetIdx(MIdx(-1, 2, 3))] << std::endl;
-    exit(9); */
-/*
-    const auto& index = m.GetIndexCells();
-    const auto& block = m.GetInBlockCells();
-    const MIdx start = block.GetBegin();
-    const MIdx size = block.GetSize();
-    const MIdx end = block.GetEnd();
-    bool hassome = false;
-    for (int iz = start[2]; iz < end[2]; ++iz) {
-      for (int iy = start[1]; iy < end[1]; ++iy) {
-        for (int ix = start[0]; ix < end[0]; ++ix) {
-          MIdx w(ix, iy, iz);
-          IdxCell c = index.GetIdx(w);
-          if (t.fcvf[0][c]>-0)
-            hassome = true;
-        }
-      }
-    }
-    if (hassome)
-      std::cout << "has data inside: mpi_rank " << mpi_rank_ << " blockID " << m.GetId() << std::endl;
-*/
-
-
-    /*std::cout << "Just recolored my domain. My rank is " << mpi_rank_
-              << " out of " << mpi_size_ << " with blockID " << m.GetId()
-              << " my pos in space: " 
-              << std::endl;
-
-    int bs = m.GetInBlockCells().GetSize()[0];*/
-
-/*if (mpi_rank_ == 0){
-    std::cout <<std::endl<<std::endl<< "----------------------------";
-    std::cout << "-------------"<< mpi_rank_<<"------------";
-    std::cout << "----------------------------";
-    for (int z = 0; z < bs; z++){
-      for (int y = 0; y < bs; y++){
-        for (int x = 0; x < bs; x++){
-          
-          std::cout << t.fcvf[0].data()[x+y*bs+z*bs*bs] << " ";
-
-        }
-        std::cout << std::endl;
-      }
-      std::cout << "----------------------------"<<std::endl;
-    }
-}*/
-
-    //m.flags.global_blocks.to_string() = 2 2 4
-
-
-    /*distri_CLL::RecolorDistributed(
+    UVof<M>().Recolor(
         t.layers, t.fcvf, t.fccl, t.fccl, 0, Vect(0), 1e10, t.mebc, verbose,
-        unionfind, reduce, grid, m);*/
+        unionfind, reduce, grid, m);
   }
   if (sem.Nested()) {
     Dump(t.layers, t.fcvf, "vf", "vf", m);
@@ -247,7 +158,7 @@ void Run(M& m, Vars& var) {
 }
 
 int main(int argc, const char** argv) {
-  // std::cout << "in main" << std::endl;
+  //std::cout << "in main" << std::endl;
   called_main_++;
 
   MpiWrapper mpi(&argc, &argv);
@@ -258,10 +169,10 @@ int main(int argc, const char** argv) {
       .Help("Extra configuration (commands 'set ... ')");
   parser.AddVariable<std::string>("config", "a.conf")
       .Help("Path to configuration file");
-  parser.AddVariable<int>("--nx", 32).Help("Mesh size in the x-direction");
-  parser.AddVariable<int>("--ny", 32).Help("Mesh size in the y-direction");
-  parser.AddVariable<int>("--nz", 32).Help("Mesh size in the z-direction");
-  parser.AddVariable<int>("--bs", 16).Help("Block size");
+  parser.AddVariable<int>("--nx", 128).Help("Mesh size in the x-direction");
+  parser.AddVariable<int>("--ny", 128).Help("Mesh size in the y-direction");
+  parser.AddVariable<int>("--nz", 128).Help("Mesh size in the z-direction");
+  parser.AddVariable<int>("--bs", 32).Help("Block size");
   parser.AddVariable<int>("--layers", 4).Help("Number of layers");
   auto args = parser.ParseArgs(argc, argv);
   if (const int* p = args.Int.Find("EXIT")) {
@@ -287,13 +198,11 @@ int main(int argc, const char** argv) {
 
   auto temp = RunMpiBasicString<M>(mpi, Run, conf.str());
 
-  // std::cout << "amount called_init_ = " << called_init_ << std::endl;
-  // std::cout << "amount called_first_dump_ = " << called_first_dump_
-  //           << std::endl;
-  // std::cout << "amount called_second_dump_ = " << called_second_dump_
-  //           << std::endl;
-  // std::cout << "amount called_run_ = " << called_run_ << std::endl;
-  // std::cout << "amount called_main_ = " << called_main_ << std::endl;
+  std::cout << "amount called_init_ = " << called_init_ << std::endl; 
+  std::cout << "amount called_first_dump_ = " << called_first_dump_ << std::endl; 
+  std::cout << "amount called_second_dump_ = " << called_second_dump_ << std::endl; 
+  std::cout << "amount called_run_ = " << called_run_ << std::endl; 
+  std::cout << "amount called_main_ = " << called_main_ << std::endl; 
 
   return temp;
 }
