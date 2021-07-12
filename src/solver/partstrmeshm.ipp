@@ -158,9 +158,9 @@ struct PartStrMeshM<M_>::Imp {
   // mx: unit in x, tangent to interface
   // my: unit in y, normal to interface
   // mn: unit vector to form orthonormal positively oriented basis <mx,my,mn>
-  Basis GetPlaneBasis(const Vect xc, const Vect n, Scal a, Scal an) {
+  static Basis GetPlaneBasis(
+      const Vect xc, const Vect n, Scal a, Scal an, const Vect h) {
     Basis res;
-    const Vect h = m.GetCellSize();
     if (M::dim == 2) {
       res.origin = xc + R::GetCenter(n, a, h);
       res.unit_y = n / n.norm();
@@ -192,7 +192,7 @@ struct PartStrMeshM<M_>::Imp {
   // basis: output of GetPlaneBasis()
   // Returns:
   // Vect(xl,yl,0) with plane coordinates xl,yl
-  Vect2 GetPlaneCoords(const Vect x, const Basis& basis) {
+  static Vect2 GetPlaneCoords(const Vect x, const Basis& basis) {
     return Vect2(
         (x - basis.origin).dot(basis.unit_x),
         (x - basis.origin).dot(basis.unit_y));
@@ -202,7 +202,7 @@ struct PartStrMeshM<M_>::Imp {
   // basis: output of GetPlaneBasis()
   // Returns:
   // x: space coordinates
-  Vect GetSpaceCoords(const Vect2 p, const Basis& basis) {
+  static Vect GetSpaceCoords(const Vect2 p, const Basis& basis) {
     return basis.origin + basis.unit_x * p[0] + basis.unit_y * p[1];
   }
 
@@ -211,18 +211,19 @@ struct PartStrMeshM<M_>::Imp {
   // xc: cell center
   // a: plane constant
   // n: interface normal
+  // h: cell size
   // in: interface flag
   // lx: nodes
   // ls: sizes
   // Returns true if a fragment is appended.
   // Output:
   // lx, ls: appended with interface fragment
-  bool AppendInterface(
-      const Basis& basis, Vect xc, Scal a, const Vect n, std::vector<Vect2>& lx,
-      std::vector<size_t>& ls) {
+  static bool AppendInterface(
+      const Basis& basis, Vect xc, Scal a, const Vect n, const Vect h,
+      std::vector<Vect2>& lx, std::vector<size_t>& ls) {
     std::array<Vect, 2> ends; // ends of intersection
 
-    auto interface = R::GetCutPoly(xc, n, a, m.GetCellSize());
+    auto interface = R::GetCutPoly(xc, n, a, h);
 
     if (M::dim == 2) {
       if (interface.size() == 2) {
@@ -298,8 +299,8 @@ struct PartStrMeshM<M_>::Imp {
           const size_t ns = (par.dim == 2 ? 1 : par.ns);
           for (size_t s = 0; s < ns; ++s) {
             const Scal section_angle = s * M_PI / ns;
-            const auto basis =
-                GetPlaneBasis(m.GetCenter(c), fcn[c], fca[c], section_angle);
+            const auto basis = GetPlaneBasis(
+                m.GetCenter(c), fcn[c], fca[c], section_angle, m.GetCellSize());
 
             // Returns segment to insert in cell cn to enforce contact angle
             auto contang_segment = [&basis, &fcn, this](
@@ -333,7 +334,8 @@ struct PartStrMeshM<M_>::Imp {
                 auto& fccl2 = *plic.vfccl[j];
                 if (fci2[cn] && (nocl || fccl2[cn] == fccl[c])) {
                   if (AppendInterface(
-                          basis, m.GetCenter(cn), fca2[cn], fcn2[cn], lx, ls)) {
+                          basis, m.GetCenter(cn), fca2[cn], fcn2[cn],
+                          m.GetCellSize(), lx, ls)) {
                     if (auto* p = boundary.find(cn)) {
                       // Contact angle is specified in cell cn.
                       if (c == cn || eb.IsCut(cn)) {
@@ -439,77 +441,75 @@ struct PartStrMeshM<M_>::Imp {
   // Dump particles to csv.
   // fca: plane constant
   // fcn: normal
-  // n: frame index
-  // t: time
+  // frame: frame index
+  // time: time
   void DumpParticles(
       const Multi<const FieldCell<Scal>*>& vfca,
-      const Multi<const FieldCell<Vect>*>& vfcn, size_t id, Scal t) {
+      const Multi<const FieldCell<Vect>*>& vfcn, size_t frame,
+      Scal time) const {
     auto sem = m.GetSem("partdump");
     struct {
-      std::vector<Vect> dpx; // dump particles x
-      std::vector<size_t> dpc; // dump particles cell
-      std::vector<Scal> dpk; // dump particles curvature
+      std::vector<Vect> dpx; // position
+      std::vector<size_t> dpc; // cell index
+      std::vector<Scal> dpk; // curvature
     } * ctx(sem);
-    auto& dpx = ctx->dpx;
-    auto& dpc = ctx->dpc;
-    auto& dpk = ctx->dpk;
+    auto& t = *ctx;
 
-    size_t it = 1;
-    if (1) { // TODO: revise frames
-      if (sem("local")) {
-        dpx.clear();
-        dpc.clear();
-        dpk.clear();
+    if (sem("local")) {
+      t.dpx.clear();
+      t.dpc.clear();
+      t.dpk.clear();
 
-        // loop over strings
-        for (size_t s = 0; s < partstr_->GetNumStr(); ++s) {
-          // cell
-          IdxCell c = vsc_[s];
-          size_t l = vsl_[s];
-          auto basis = GetPlaneBasis(
-              m.GetCenter(c), (*vfcn[l])[c], (*vfca[l])[c], vsan_[s]);
+      // loop over strings
+      for (size_t s = 0; s < partstr_->GetNumStr(); ++s) {
+        const IdxCell c = vsc_[s];
+        const size_t l = vsl_[s];
+        const auto basis = GetPlaneBasis(
+            m.GetCenter(c), (*vfcn[l])[c], (*vfca[l])[c], vsan_[s],
+            m.GetCellSize());
 
-          auto p = partstr_->GetStr(s);
-          const Vect2* xx = p.first;
-          size_t sx = p.second;
+        const auto p = partstr_->GetStr(s);
+        const Vect2* xx = p.first;
+        size_t sx = p.second;
 
-          size_t ic = m.GetHash(c);
-          for (size_t i = 0; i < sx; ++i) {
-            auto x = GetSpaceCoords(xx[i], basis);
-            dpx.push_back(x);
-            dpc.push_back(ic);
-            dpk.push_back(partstr_->GetCurv(s));
-          }
+        size_t ic = m.GetHash(c);
+        for (size_t i = 0; i < sx; ++i) {
+          auto x = GetSpaceCoords(xx[i], basis);
+          t.dpx.push_back(x);
+          t.dpc.push_back(ic);
+          t.dpk.push_back(partstr_->GetCurv(s));
         }
-
-        m.Reduce(&dpx, Reduction::concat);
-        m.Reduce(&dpc, Reduction::concat);
-        m.Reduce(&dpk, Reduction::concat);
       }
-      if (sem("write")) {
-        if (m.IsRoot()) {
-          std::string s =
-              GetDumpName("partit", ".csv", id, par.dump_fr > 1 ? it : -1);
-          std::cerr << std::fixed << std::setprecision(8) << "dump"
-                    << " t=" << t << " to " << s << std::endl;
-          std::ofstream o;
-          o.open(s);
-          o.precision(20);
-          o << "x,y,z,c,k\n";
 
-          std::vector<size_t> idx(dpc.size());
-          std::iota(idx.begin(), idx.end(), 0);
-          std::stable_sort(
-              idx.begin(), idx.end(),
-              [&dpc](size_t i1, size_t i2) { return dpc[i1] < dpc[i2]; });
+      m.Reduce(&t.dpx, Reduction::concat);
+      m.Reduce(&t.dpc, Reduction::concat);
+      m.Reduce(&t.dpk, Reduction::concat);
+    }
+    if (sem("write")) {
+      if (m.IsRoot()) {
+        std::string s = GetDumpName("partit", ".csv", frame, -1);
+        std::cerr << std::fixed << std::setprecision(8) << "dump"
+                  << " t=" << time << " to " << s << std::endl;
+        std::ofstream out;
+        out.open(s);
+        out.precision(20);
+        out << "x,y,z,c,k\n";
 
-          for (size_t j = 0; j < dpx.size(); ++j) {
-            const size_t i = idx[j];
-            for (auto d : M::dirs) {
-              o << dpx[i][d] << ',';
-            }
-            o << dpc[i] << "," << dpk[i] << "\n";
-          }
+        // indices such that dpc[argsort] is sorted,
+        // needed to make the ordering independent from the number of blocks
+        std::vector<size_t> argsort(t.dpc.size());
+        std::iota(argsort.begin(), argsort.end(), 0);
+        std::stable_sort(
+            argsort.begin(), argsort.end(),
+            [&dpc = t.dpc](size_t i1, size_t i2) { return dpc[i1] < dpc[i2]; });
+
+        for (size_t j = 0; j < t.dpx.size(); ++j) {
+          const size_t i = argsort[j];
+          const auto& x = t.dpx[i];
+          out << x[0] << ',';
+          out << (M::dim > 1 ? x[1] : 0) << ',';
+          out << (M::dim > 2 ? x[2] : 0) << ',';
+          out << t.dpc[i] << "," << t.dpk[i] << "\n";
         }
       }
     }
@@ -517,7 +517,8 @@ struct PartStrMeshM<M_>::Imp {
   // Dumps interface around particle strings
   void DumpPartInter(
       const Multi<const FieldCell<Scal>*>& vfca,
-      const Multi<const FieldCell<Vect>*>& vfcn, size_t id, Scal t) {
+      const Multi<const FieldCell<Vect>*>& vfcn, size_t frame,
+      Scal time) const {
     auto sem = m.GetSem("dumppartinter");
     struct {
       std::vector<std::vector<Vect>> dl; // lines
@@ -531,7 +532,8 @@ struct PartStrMeshM<M_>::Imp {
         const IdxCell c = vsc_[s]; // cell containing string
         const size_t layer = vsl_[s];
         const auto basis = GetPlaneBasis(
-            m.GetCenter(c), (*vfcn[layer])[c], (*vfca[layer])[c], vsan_[s]);
+            m.GetCenter(c), (*vfcn[layer])[c], (*vfca[layer])[c], vsan_[s],
+            m.GetCellSize());
         const auto inter = partstr_->GetInter(s);
         const size_t hc = m.GetHash(c);
         size_t i = 0;
@@ -559,9 +561,9 @@ struct PartStrMeshM<M_>::Imp {
         Reorder(dl, idx);
         Reorder(dlc, idx);
 
-        std::string fn = GetDumpName("sp", ".vtk", id);
+        std::string fn = GetDumpName("sp", ".vtk", frame);
         std::cerr << std::fixed << std::setprecision(8) << "dump"
-                  << " t=" << t << " to " << fn << std::endl;
+                  << " t=" << time << " to " << fn << std::endl;
         WriteVtkPoly<Vect>(
             fn, dl, nullptr, {&dlc}, {"c"},
             "Lines of interface around particles", false, par.vtkbin,
@@ -602,27 +604,29 @@ void PartStrMeshM<M_>::Part(const Plic& plic, const EB& eb) {
 template <class M_>
 void PartStrMeshM<M_>::DumpPartInter(
     const Multi<const FieldCell<Scal>*>& vfca,
-    const Multi<const FieldCell<Vect>*>& vfcn, size_t id, Scal t) {
-  imp->DumpPartInter(vfca, vfcn, id, t);
+    const Multi<const FieldCell<Vect>*>& vfcn, size_t frame, Scal time) const {
+  imp->DumpPartInter(vfca, vfcn, frame, time);
 }
 
 template <class M_>
 void PartStrMeshM<M_>::DumpParticles(
     const Multi<const FieldCell<Scal>*>& vfca,
-    const Multi<const FieldCell<Vect>*>& vfcn, size_t id, Scal t) {
-  imp->DumpParticles(vfca, vfcn, id, t);
+    const Multi<const FieldCell<Vect>*>& vfcn, size_t frame, Scal time) const {
+  imp->DumpParticles(vfca, vfcn, frame, time);
 }
 
 template <class M_>
 void PartStrMeshM<M_>::DumpPartInter(
-    const FieldCell<Scal>& fca, const FieldCell<Vect>& fcn, size_t id, Scal t) {
-  imp->DumpPartInter(&fca, &fcn, id, t);
+    const FieldCell<Scal>& fca, const FieldCell<Vect>& fcn, size_t frame,
+    Scal time) const {
+  imp->DumpPartInter(&fca, &fcn, frame, time);
 }
 
 template <class M_>
 void PartStrMeshM<M_>::DumpParticles(
-    const FieldCell<Scal>& fca, const FieldCell<Vect>& fcn, size_t id, Scal t) {
-  imp->DumpParticles(&fca, &fcn, id, t);
+    const FieldCell<Scal>& fca, const FieldCell<Vect>& fcn, size_t frame,
+    Scal time) const {
+  imp->DumpParticles(&fca, &fcn, frame, time);
 }
 
 template <class M_>

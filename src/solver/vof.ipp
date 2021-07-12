@@ -45,6 +45,8 @@ struct Vof<EB_>::Imp {
       , fca_(m, GetNan<Scal>())
       , fcn_(m, GetNan<Vect>())
       , fci_(m, false) {
+    par.dim = std::min(par.dim, M::dim);
+
     fcu_.time_curr = fcu;
 
     UpdateBc(mebc_);
@@ -600,10 +602,24 @@ struct Vof<EB_>::Imp {
       }
     }
   }
-  void DumpInterface(std::string filename) {
-    uvof_.DumpPoly(
-        fcu_.time_curr, fcn_, fca_, fci_, filename, owner_->GetTime(),
-        par.vtkbin, par.vtkmerge, m);
+  void DumpInterface(
+      std::string filename,
+      std::vector<Multi<const FieldCell<Scal>*>> extra_fields,
+      std::vector<std::string> extra_names) {
+    typename UVof<M>::DumpPolyArgs args;
+    args.layers = GRange<size_t>(1);
+    args.fcu = &fcu_.time_curr;
+    args.fccl = (FieldCell<Scal>*)(nullptr);
+    args.fcn = &fcn_;
+    args.fca = &fca_;
+    args.fci = &fci_;
+    args.filename = filename;
+    args.time = owner_->GetTime();
+    args.binary = par.vtkbin;
+    args.merge = par.vtkmerge;
+    args.extra_fields = extra_fields;
+    args.extra_names = extra_names;
+    uvof_.DumpPoly(args, m);
   }
   void DumpInterfaceMarch(std::string filename) {
     auto sem = m.GetSem("dump-interface-march");
@@ -626,8 +642,8 @@ struct Vof<EB_>::Imp {
     }
     if (sem.Nested()) {
       uvof_.DumpPolyMarch(
-          layers, &fcut, &fcclt, &fcn_, &fca_, &fci_, filename,
-          owner_->GetTime(), par.vtkbin, par.vtkmerge, par.vtkiso,
+          layers, &fcut, &fcclt, &fcn_, filename, owner_->GetTime(),
+          par.vtkpoly, par.vtkbin, par.vtkmerge, par.vtkiso,
           par.dumppolymarch_fill >= 0 ? &fcut : nullptr, m);
     }
   }
@@ -753,8 +769,11 @@ void Vof<EB_>::PostStep() {
 }
 
 template <class EB_>
-void Vof<EB_>::DumpInterface(std::string fn) const {
-  return imp->DumpInterface(fn);
+void Vof<EB_>::DumpInterface(
+    std::string fn,
+    std::vector<Multi<const FieldCell<Scal>*>> extra_fields,
+    std::vector<std::string> extra_names) const {
+  return imp->DumpInterface(fn, extra_fields, extra_names);
 }
 
 template <class EB_>

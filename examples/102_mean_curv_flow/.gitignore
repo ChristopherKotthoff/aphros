@@ -3,6 +3,7 @@
 *.vtk
 *.vts
 *.pvd
+*.raw
 arg
 job.id
 job.status
@@ -10,3 +11,8 @@ np
 out
 job.id.last
 add.conf
+b.dat
+traj.dat
+run.log
+sides*_nx*
+vis/*.png

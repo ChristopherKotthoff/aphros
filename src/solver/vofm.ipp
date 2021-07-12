@@ -42,7 +42,7 @@ struct Vofm<EB_>::Imp {
       , m(owner_->m)
       , eb(eb_)
       , layers(layers0)
-      , fcuu_(layers, m)
+      , fcuu_(layers, m, 0)
       , fccls_(m, kClNone)
       , fcn_(layers, m, GetNan<Vect>())
       , fca_(layers, m, GetNan<Scal>())
@@ -50,10 +50,9 @@ struct Vofm<EB_>::Imp {
       , fccl_(fccl0)
       , fcim_(layers, m, TRM::Pack(MIdx(0)))
       , fcim_unpack_(layers, m, MIdx(0))
-      , ffvu_(layers, m, 0)
-      , ffcl_(layers, m, kClNone)
-      , ffi_(layers, m, false)
       , mebc_(owner_->mebc_) {
+    par.dim = std::min(par.dim, M::dim);
+
     fcu0.assert_size(layers);
     fccl0.assert_size(layers);
     fcu_.time_curr = fcu0;
@@ -106,13 +105,10 @@ struct Vofm<EB_>::Imp {
         auto& fcn = fcn_[i];
         auto& fci = fci_[i];
         auto& fccl = fccl_[i];
-
-        const int sw = 1; // stencil halfwidth
-        using MIdx = typename M::MIdx;
-        GBlock<IdxCell, dim> bo(MIdx(-sw), MIdx(sw * 2 + 1));
         for (auto c : eb.SuCells()) {
           if (fci[c]) {
-            auto uu = GetStencilValues<Scal>(layers, uc, fccl_, c, fccl[c], m);
+            const auto uu =
+                GetStencilValues<Scal>(layers, uc, fccl_, c, fccl[c], m);
             fcn[c] = UNormal<M>::GetNormalYoungs(uu);
             UNormal<M>::GetNormalHeight(uu, fcn[c]);
           } else {
@@ -293,10 +289,24 @@ struct Vofm<EB_>::Imp {
     LE, // Lagrange Explicit (aulisa2009)
     weymouth, // sum of fluxes and divergence (weymouth2010)
   };
-  void DumpInterface(std::string filename) {
-    uvof_.DumpPoly(
-        layers, fcu_.time_curr, fccl_, fcn_, fca_, fci_, filename,
-        owner_->GetTime(), par.vtkbin, par.vtkmerge, m);
+  void DumpInterface(
+      std::string filename,
+      std::vector<Multi<const FieldCell<Scal>*>> extra_fields,
+      std::vector<std::string> extra_names) {
+    typename UVof<M>::DumpPolyArgs args;
+    args.layers = layers;
+    args.fcu = fcu_.time_curr;
+    args.fccl = fccl_;
+    args.fcn = fcn_;
+    args.fca = fca_;
+    args.fci = fci_;
+    args.filename = filename;
+    args.time = owner_->GetTime();
+    args.binary = par.vtkbin;
+    args.merge = par.vtkmerge;
+    args.extra_fields = extra_fields;
+    args.extra_names = extra_names;
+    uvof_.DumpPoly(args, m);
   }
   void DumpInterfaceMarch(std::string filename) {
     auto sem = m.GetSem("dump-interface-march");
@@ -324,7 +334,7 @@ struct Vofm<EB_>::Imp {
     }
     if (sem.Nested()) {
       uvof_.DumpPolyMarch(
-          layers, fcut, fcclt, fcn_, fca_, fci_, filename, owner_->GetTime(),
+          layers, fcut, fcclt, fcn_, filename, owner_->GetTime(), par.vtkpoly,
           par.vtkbin, par.vtkmerge, par.vtkiso,
           par.dumppolymarch_fill >= 0 ? &fcust : nullptr, m);
     }
@@ -364,7 +374,7 @@ struct Vofm<EB_>::Imp {
         }
         Sweep(
             mfcu, d, layers, ffv, fccl_, fcim_, fcn_, fca_, me_vf_,
-            SweepType::weymouth, nullptr, nullptr, fcuu_, 1., par.clipth, eb);
+            SweepType::weymouth, nullptr, nullptr, fcuu_, 1, par.clipth, eb);
       }
       CommRec(sem, mfcu, fccl_, fcim_);
       if (par.extrapolate_boundaries) {
@@ -397,8 +407,7 @@ struct Vofm<EB_>::Imp {
         dd = {1, 0};
       }
     }
-    for (size_t id = 0; id < dd.size(); ++id) {
-      size_t d = dd[id]; // direction as index
+    for (auto d : dd) {
       if (sem("sweep")) {
         Sweep(
             mfcu, d, layers, owner_->fev_->GetFieldFace(), fccl_, fcim_, fcn_,
@@ -465,7 +474,7 @@ struct Vofm<EB_>::Imp {
         // flux through full face that would give the same velocity
         const Scal v0 = v / eb.GetAreaFraction(f);
         const IdxCell c = m.GetCell(f, v > 0 ? 0 : 1); // upwind cell
-        if (fccl[c] != kClNone) {
+        if (v != 0 && fccl[c] != kClNone) {
           ffcl[f] = fccl[c];
           if (fcu[c] > 0 && fcu[c] < 1 && fcn[c].sqrnorm() > 0) {
             switch (type) {
@@ -598,8 +607,8 @@ struct Vofm<EB_>::Imp {
   // filterth: threshold for detecting orphan fragments
   static void FilterOrphan(
       const Multi<FieldCell<Scal>*>& fcu, const GRange<size_t>& layers,
-      const Multi<FieldCell<Scal>*>& fccl,
-      const Multi<FieldCell<Scal>*>& fcim, Scal filterth, const EB& eb) {
+      const Multi<FieldCell<Scal>*>& fccl, const Multi<FieldCell<Scal>*>& fcim,
+      Scal filterth, const EB& eb) {
     for (auto l : layers) {
       for (auto c : eb.Cells()) {
         if ((*fccl[l])[c] != kClNone) {
@@ -698,9 +707,6 @@ struct Vofm<EB_>::Imp {
   }
   void MakeIteration() {
     auto sem = m.GetSem("iter");
-    struct {
-      Multi<FieldCell<Scal>> fcclm; // previous color
-    } * ctx(sem);
     if (sem("init")) {
       for (auto l : layers) {
         auto& uc = fcu_.iter_curr[l];
@@ -714,7 +720,6 @@ struct Vofm<EB_>::Imp {
           fcuu[c] = (uc[c] < 0.5 ? 0 : 1);
         }
       }
-      ctx->fcclm = fccl_;
     }
 
     using Scheme = typename Par::Scheme;
@@ -868,10 +873,6 @@ struct Vofm<EB_>::Imp {
   Multi<FieldCell<Scal>> fccl_; // color
   Multi<FieldCell<Scal>> fcim_; // image
   Multi<FieldCell<MIdx>> fcim_unpack_; // image unpacked
-  Multi<FieldFace<Scal>> ffvu_; // flux: volume flux * field
-  Multi<FieldFace<Scal>> ffcl_; // flux color (from upwind cell)
-  Multi<FieldFace<bool>> ffi_; // interface mask
-                               // (1: upwind cell contains interface)
   size_t count_ = 0; // number of MakeIter() calls, used for splitting
 
   // boundary conditions
@@ -941,6 +942,11 @@ void Vofm<EB_>::SetPar(Par par) {
 template <class EB_>
 void Vofm<EB_>::StartStep() {
   imp->StartStep();
+}
+
+template <class EB_>
+void Vofm<EB_>::Sharpen() {
+  imp->Sharpen(imp->fcu_.iter_curr);
 }
 
 template <class EB_>
@@ -1025,13 +1031,16 @@ void Vofm<EB_>::PostStep() {
 }
 
 template <class EB_>
-void Vofm<EB_>::DumpInterface(std::string fn) const {
-  return imp->DumpInterface(fn);
+void Vofm<EB_>::DumpInterface(
+    std::string filename,
+    std::vector<Multi<const FieldCell<Scal>*>> extra_fields,
+    std::vector<std::string> extra_names) const {
+  return imp->DumpInterface(filename, extra_fields, extra_names);
 }
 
 template <class EB_>
-void Vofm<EB_>::DumpInterfaceMarch(std::string fn) const {
-  return imp->DumpInterfaceMarch(fn);
+void Vofm<EB_>::DumpInterfaceMarch(std::string filename) const {
+  return imp->DumpInterfaceMarch(filename);
 }
 
 template <class EB_>

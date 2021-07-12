@@ -34,12 +34,13 @@ class Vof final : public AdvectionSolver<typename EB_::M> {
     size_t layers = 4;
     Scal avgnorm0 = 1; // original normal with sum(u)<avgnorm0
     Scal avgnorm1 = 1; // overriden normal with sum(u)>=acgnorm1
-    Scal coalth = 1.5;
+    Scal coalth = 1e10;
     int verb = 0;
     bool bcc_reflectpoly = true; // reflection for DumpPolyMarch
     Scal dumppolymarch_fill = -1; // fill cells outside
-    bool vtkbin = false;
+    bool vtkbin = true;
     bool vtkmerge = true;
+    bool vtkpoly = true; // dump vtk polygins instead of lines
     Scal vtkiso = 0.5;
     enum class Scheme { plain, aulisa, weymouth };
     Scheme scheme = Scheme::weymouth;
@@ -81,13 +82,17 @@ class Vof final : public AdvectionSolver<typename EB_::M> {
   static constexpr Scal kClNone = -1; // no color
   // Image vector, number of passes through periodic boundaries
   const FieldCell<MIdx>& GetImage() const;
-  void DumpInterface(std::string filename) const override;
+  void DumpInterface(
+      std::string filename,
+      std::vector<Multi<const FieldCell<Scal>*>> extra_fields,
+      std::vector<std::string> extra_names) const override;
   void DumpInterfaceMarch(std::string filename) const override;
   // Adds a function that modifies the fields at the next iteration
   // and after which is removed.
   void AddModifier(
       std::function<
           void(FieldCell<Scal>& fcu, FieldCell<Scal>& fccl, const EB&)>);
+  // Applies sharpening to field iter_curr
   void Sharpen();
 
  private:

@@ -1,0 +1,31 @@
+#!/bin/bash
+
+set -eu
+
+MYDIR=$(dirname "$0")
+
+sides=$1
+
+e () {
+  nx=$(printf %03d $1)
+  nxm=$(($1 / 2))
+  nxm=$(printf %03d $nxm)
+  mkdir -p "sides${sides}"
+  out=sides${sides}/dist$nx
+  dir=sides${sides}_nx$nx
+  dirm=sides${sides}_nx$nxm
+  if ! [ -d "$dir" ] || ! [ -d "$dirm" ] ; then
+    return
+  fi
+  if [ -f "$out" ] && ! [ "$dir" -nt "$out" ] ; then
+    echo "skip existing $out"
+    return
+  fi
+  $MYDIR/hausdorff_all $dir $dirm > "$out"
+}
+
+e 64
+e 128
+e 256
+e 512
+e 1024

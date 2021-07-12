@@ -3,6 +3,19 @@
 
 #include "curv.ipp"
 
-#define X(dim) template struct UCurv<MeshCartesian<double, dim>>;
+namespace curvature {
+
+#define XX(M)                                              \
+  template class Particles<M>;                             \
+  template class Heights<M>;                               \
+  template class Hybrid<M>;                                \
+  template std::unique_ptr<Estimator<M>> MakeEstimator<M>( \
+      const Vars&, M&, const GRange<size_t>&);
+
+#define COMMA ,
+#define X(dim) XX(MeshCartesian<double COMMA dim>)
 MULTIDIMX
 #undef X
+#undef XX
+
+} // namespace curvature
