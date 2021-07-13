@@ -796,12 +796,12 @@ for (auto l: layers) {                                                          
     }                                                                                                                                                                                                                                 \
   }
 
-#define COORD_TO_MPI_RANK(x, y, z)     \
+#define COORD_TO_BLOCKID(x, y, z)     \
   (x) + (y)*m.flags.global_blocks[0] + \
       (z)* m.flags.global_blocks[0] * m.flags.global_blocks[1]
 
-#define DEBUG_CONDITION mpi_rank_ == 42
-#define DEBUG_CONDITION2 mpi_rank_ == 42
+#define DEBUG_CONDITION blockID == 0
+#define DEBUG_CONDITION2 blockID != -1
 
 typedef int CAG_Node;
 
@@ -813,6 +813,8 @@ using IndexCells = GIndex<IdxCell, 3>;
 
 int kBlockSize = -1;
 int kDimensions[] = {-1, -1, -1};
+
+int blockID_to_mpi_rank_[] = {0,0,1,1}; //mpirun -n 2 --oversubscribe ./main --nx 64 --ny 64 --nz 32 --bs 32 --layers 1
 
 constexpr double kClNone = -1;
 
@@ -847,6 +849,7 @@ struct CAG_NodesPointerTable {
   CAG_Node CAG_Node_id;
   CAG_Node pointing_to;
 };
+
 
 IdxCell getCellFromIndex(const IndexCells& index, int x, int y, int z) {
   MIdx w(x, y, z);
@@ -901,13 +904,13 @@ void MakeLookupTable(
 }
 
 void MergeLabels(int merger_array[], int merger_size, std::vector<int>& union_find_array){
-  if (DEBUG_CONDITION2){
-    std::cout <<"unionfindsize: "<< union_find_array.size()<<" arraysize: "<< merger_size << " merging ";
-    for (int i = 0; i < merger_size;i++){
-      std::cout << merger_array[i] << " ";
-    }
-    std::cout << std::endl;
-  }
+  // if (DEBUG_CONDITION2){
+  //   std::cout <<"unionfindsize: "<< union_find_array.size()<<" arraysize: "<< merger_size << " merging ";
+  //   for (int i = 0; i < merger_size;i++){
+  //     std::cout << merger_array[i] << " ";
+  //   }
+  //   std::cout << std::endl;
+  // }
 
   for (int i = 0; i < merger_size-1;i++){
     if (merger_array[i] != merger_array[i+1]){
@@ -1118,6 +1121,7 @@ void DoTwoPass(
 }
 
  */
+
 int CagFind(
     int CAG_Node_id, std::unordered_map<CAG_Node, CAG_NodeProperties>& cag) {
   if (cag.at(CAG_Node_id).pointing_to != CAG_Node_id)
@@ -1134,34 +1138,34 @@ void CagDoUnion(
   CAG_Node root2 = CagFind(CAG_Node2, cag);
 
   if (root1 == root2) {
-    if (DEBUG_CONDITION) {
-      std::cout << "  └─nothing to do since roots are the same" << std::endl;
-    }
+    // if (DEBUG_CONDITION) {
+    //   std::cout << "  └─nothing to do since roots are the same" << std::endl;
+    // }
     return;
   } else if (root1 < root2) {
     cag[root2].pointing_to = root1;
 
-    if (DEBUG_CONDITION) {
-      std::cout << "  └─root of CAG_Node " << CAG_Node1 << " is " << root1
-                << std::endl;
-      std::cout << "  └─root of CAG_Node " << CAG_Node2 << " is " << root2
-                << std::endl;
-      std::cout << "  └─setting pointing_to of root " << root2 << " to "
-                << root1 << std::endl;
-    }
+    // if (DEBUG_CONDITION) {
+    //   std::cout << "  └─root of CAG_Node " << CAG_Node1 << " is " << root1
+    //             << std::endl;
+    //   std::cout << "  └─root of CAG_Node " << CAG_Node2 << " is " << root2
+    //             << std::endl;
+    //   std::cout << "  └─setting pointing_to of root " << root2 << " to "
+    //             << root1 << std::endl;
+    // }
 
     // return root1;
   } else {
     cag[root1].pointing_to = root2;
 
-    if (DEBUG_CONDITION) {
-      std::cout << "  └─root of CAG_Node " << CAG_Node1 << " is " << root1
-                << std::endl;
-      std::cout << "  └─root of CAG_Node " << CAG_Node2 << " is " << root2
-                << std::endl;
-      std::cout << "  └─setting pointing_to of root " << root1 << " to "
-                << root2 << std::endl;
-    }
+    // if (DEBUG_CONDITION) {
+    //   std::cout << "  └─root of CAG_Node " << CAG_Node1 << " is " << root1
+    //             << std::endl;
+    //   std::cout << "  └─root of CAG_Node " << CAG_Node2 << " is " << root2
+    //             << std::endl;
+    //   std::cout << "  └─setting pointing_to of root " << root1 << " to "
+    //             << root2 << std::endl;
+    // }
     // return root2;
   }
 }
@@ -1181,18 +1185,24 @@ void RecolorDistributed(
     std::unordered_map<CAG_Node, CAG_NodeProperties> cag;
     int partners_size;
     int counter;
+    int lowest_local_CAG_Node_id;
+    int highest_local_CAG_Node_id;   
+    int local_cc_size;   
     Multi<FieldCell<Scal>> fccl_new;
     std::vector<int> compressed_cag;
     std::vector<int> received_compressed_cag;
 
     // Pointers to objects from other local blocks:
     std::vector<std::vector<int>*> collected_compressed_cags;
+    std::vector<std::vector<int>*> collected_recieved_compressed_cags;
 
     //only relevant to lead block:
     bool first_reduction;
-    std::unordered_map<int, std::vector<int>> receiver_cag_map;
+    std::unordered_map<int, std::vector<int>*> receiver_cag_map;
 
   } * ctx(sem);
+
+
   auto& t = *ctx;
 
   auto& cclabels = ctx->cclabels;
@@ -1205,20 +1215,30 @@ void RecolorDistributed(
   auto& compressed_cag = ctx->compressed_cag;
   auto& received_compressed_cag = ctx->received_compressed_cag;
   auto& collected_compressed_cags = ctx->collected_compressed_cags;
+  auto& collected_recieved_compressed_cags = ctx->collected_recieved_compressed_cags;
   auto& first_reduction = ctx->first_reduction;
   auto& receiver_cag_map = ctx->receiver_cag_map;
 
+  auto& lowest_local_CAG_Node_id = ctx->lowest_local_CAG_Node_id;
+  auto& highest_local_CAG_Node_id = ctx->highest_local_CAG_Node_id;
+  auto& local_cc_size = ctx->local_cc_size;
+
+  int blockID = m.GetId();
+
+if (m.IsLead()){
   MPI_Comm_rank(m.GetMpiComm(), &mpi_rank_);
   MPI_Comm_size(m.GetMpiComm(), &mpi_size_);
-
+}
   kDimensions[0] = m.GetGlobalSize().data()[0];
   kDimensions[1] = m.GetGlobalSize().data()[1];
   kDimensions[2] = m.GetGlobalSize().data()[2];
 
   kBlockSize = m.GetInBlockCells().GetSize()[0];
 
-  int blockID = m.GetId();
 
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:2" << std::endl;
+}
   int start_color =
       blockID * kBlockSize * kBlockSize * kBlockSize * layers.size();
 if (sem()) {  
@@ -1226,83 +1246,98 @@ if (sem()) {
   assert(
       mpi_size_ == m.flags.global_blocks[0] * m.flags.global_blocks[1] *
                        m.flags.global_blocks[2]);
-  assert(mpi_rank_ == blockID);
+  // assert(mpi_rank_ == blockID);
   assert(kDimensions[0] % kBlockSize == 0);
   assert(kDimensions[1] % kBlockSize == 0);
   assert(kDimensions[2] % kBlockSize == 0);
-  if (mpi_size_ != m.flags.global_blocks[0] * m.flags.global_blocks[1] *
-                       m.flags.global_blocks[2])
-    std::cout << "ERROR: Amount of ranks should be "
-              << m.flags.global_blocks[0] * m.flags.global_blocks[1] *
-                     m.flags.global_blocks[2]
-              << " but is " << mpi_size_ << "\n";
-  assert(
-      mpi_size_ == m.flags.global_blocks[0] * m.flags.global_blocks[1] *
-                       m.flags.global_blocks[2]);
-
-  int my_x = mpi_rank_ % m.flags.global_blocks[0];
+  // if (mpi_size_ != m.flags.global_blocks[0] * m.flags.global_blocks[1] *
+  //                      m.flags.global_blocks[2])
+  //   std::cout << "ERROR: Amount of ranks should be "
+  //             << m.flags.global_blocks[0] * m.flags.global_blocks[1] *
+  //                    m.flags.global_blocks[2]
+  //             << " but is " << mpi_size_ << "\n";
+  // assert(
+  //     mpi_size_ == m.flags.global_blocks[0] * m.flags.global_blocks[1] *
+  //                      m.flags.global_blocks[2]);
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:3" << std::endl;
+}
+  int my_x = blockID % m.flags.global_blocks[0];
   int my_y =
-      (mpi_rank_ % (m.flags.global_blocks[1] * m.flags.global_blocks[0])) /
+      (blockID % (m.flags.global_blocks[1] * m.flags.global_blocks[0])) /
       m.flags.global_blocks[0];
-  int my_z = mpi_rank_ / (m.flags.global_blocks[1] * m.flags.global_blocks[0]);
+  int my_z = blockID / (m.flags.global_blocks[1] * m.flags.global_blocks[0]);
 
   if (DEBUG_CONDITION)
     std::cout << "amount of blocks in xyz: " << m.flags.global_blocks[0] << " " << m.flags.global_blocks[1]<< " " << m.flags.global_blocks[2]<< std::endl;
   if (DEBUG_CONDITION)
-    std::cout << mpi_rank_ << ": my block coordinates are " << my_x << " " << my_y << " " << my_z << std::endl;
-
+    std::cout << blockID << ": my block coordinates are " << my_x << " " << my_y << " " << my_z << std::endl;
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:4" << std::endl;
+}
   collected_compressed_cags.push_back(&compressed_cag);  //do once since reference stays the same during all iterations of the reduction.
   m.GatherToLead(&collected_compressed_cags);
+  received_compressed_cag.push_back(blockID);
+  collected_recieved_compressed_cags.push_back(&received_compressed_cag);  //do once since reference stays the same during all iterations of the reduction.
+  m.GatherToLead(&collected_recieved_compressed_cags);
   first_reduction = true;
-
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:5" << std::endl;
+}
   int neighbours[6];
   {
     if (my_x + 1 < m.flags.global_blocks[0])
-      neighbours[kXpositiv] = COORD_TO_MPI_RANK(my_x + 1, my_y, my_z);
+      neighbours[kXpositiv] = COORD_TO_BLOCKID(my_x + 1, my_y, my_z);
     else
       neighbours[kXpositiv] =
-          COORD_TO_MPI_RANK(my_x + 1 - m.flags.global_blocks[0], my_y, my_z);
+          COORD_TO_BLOCKID(my_x + 1 - m.flags.global_blocks[0], my_y, my_z);
 
     if (my_x - 1 >= 0)
-      neighbours[kXnegativ] = COORD_TO_MPI_RANK(my_x - 1, my_y, my_z);
+      neighbours[kXnegativ] = COORD_TO_BLOCKID(my_x - 1, my_y, my_z);
     else
       neighbours[kXnegativ] =
-          COORD_TO_MPI_RANK(my_x - 1 + m.flags.global_blocks[0], my_y, my_z);
+          COORD_TO_BLOCKID(my_x - 1 + m.flags.global_blocks[0], my_y, my_z);
 
     if (my_y + 1 < m.flags.global_blocks[1])
-      neighbours[kYpositiv] = COORD_TO_MPI_RANK(my_x, my_y + 1, my_z);
+      neighbours[kYpositiv] = COORD_TO_BLOCKID(my_x, my_y + 1, my_z);
     else
       neighbours[kYpositiv] =
-          COORD_TO_MPI_RANK(my_x, my_y + 1 - m.flags.global_blocks[1], my_z);
+          COORD_TO_BLOCKID(my_x, my_y + 1 - m.flags.global_blocks[1], my_z);
 
     if (my_y - 1 >= 0)
-      neighbours[kYnegativ] = COORD_TO_MPI_RANK(my_x, my_y - 1, my_z);
+      neighbours[kYnegativ] = COORD_TO_BLOCKID(my_x, my_y - 1, my_z);
     else
       neighbours[kYnegativ] =
-          COORD_TO_MPI_RANK(my_x, my_y - 1 + m.flags.global_blocks[1], my_z);
+          COORD_TO_BLOCKID(my_x, my_y - 1 + m.flags.global_blocks[1], my_z);
 
     if (my_z + 1 < m.flags.global_blocks[2])
-      neighbours[kZpositiv] = COORD_TO_MPI_RANK(my_x, my_y, my_z + 1);
+      neighbours[kZpositiv] = COORD_TO_BLOCKID(my_x, my_y, my_z + 1);
     else
       neighbours[kZpositiv] =
-          COORD_TO_MPI_RANK(my_x, my_y, my_z + 1 - m.flags.global_blocks[2]);
+          COORD_TO_BLOCKID(my_x, my_y, my_z + 1 - m.flags.global_blocks[2]);
 
     if (my_z - 1 >= 0)
-      neighbours[kZnegativ] = COORD_TO_MPI_RANK(my_x, my_y, my_z - 1);
+      neighbours[kZnegativ] = COORD_TO_BLOCKID(my_x, my_y, my_z - 1);
     else
       neighbours[kZnegativ] =
-          COORD_TO_MPI_RANK(my_x, my_y, my_z - 1 + m.flags.global_blocks[2]);
+          COORD_TO_BLOCKID(my_x, my_y, my_z - 1 + m.flags.global_blocks[2]);
     
   }
+  if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:6" << std::endl;
+}
 }
   if (sem()) { // two pass and border exchange
+  if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:7" << std::endl;
+}
     std::vector<int> union_find_array;
 
     fccl_new.Reinit(layers, m, kClNone);
 
     counter = 0;
     if (DEBUG_CONDITION2)
-      std::cout << mpi_rank_ << ": " << 0 << " " << counter++ << std::endl;
+      std::cout << blockID << ": " << 0 << " " << counter++ << std::endl;
 
     // if (DEBUG_CONDITION2) {
     //   for (auto c : m.AllCells()) {
@@ -1316,11 +1351,16 @@ if (sem()) {
     //   }
     //   std::cout << std::endl;
     // }
+    if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:8" << std::endl;
+}
 
     DoTwoPass(layers, fccl, fccl_new, union_find_array, start_color++, cclabels, m);
     if (DEBUG_CONDITION2)
-      std::cout << mpi_rank_ << ": " << 1 << " " << counter++ << std::endl;
-
+      std::cout << blockID << ": " << 1 << " " << counter++ << std::endl;
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:9" << std::endl;
+}
     // if (DEBUG_CONDITION2) {
     //   for (auto c : m.AllCells()) {
     //     bool temp = false;
@@ -1333,19 +1373,23 @@ if (sem()) {
     //   }
     //   std::cout << std::endl;
     // }
-
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:10" << std::endl;
+}
     for (auto l : layers) {
       m.Comm(&fccl_new[l]);
     }
     if (DEBUG_CONDITION2)
-      std::cout << mpi_rank_ << ": " << 2 << " " << counter++ << std::endl;
+      std::cout << blockID << ": " << 2 << " " << counter++ << std::endl;
   }
 
   if (sem()) { // local cag construction
-
-    int local_cc_size = cclabels.size();
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:11" << std::endl;
+}
+    local_cc_size = cclabels.size();
     if (DEBUG_CONDITION2)
-      std::cout << mpi_rank_ << ": " << 3 << " " << counter++ << std::endl;
+      std::cout << blockID << ": " << 3 << " " << counter++ << std::endl;
 
     struct Edges {
       CAG_Node CAG_Node_id;
@@ -1376,10 +1420,12 @@ if (sem()) {
 
       local_cag[cclabels[i]] = local_node;
     }
-
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:12" << std::endl;
+}
 
     if (DEBUG_CONDITION2)
-      std::cout << mpi_rank_ << ": " << 4 << " " << counter++ << std::endl;
+      std::cout << blockID << ": " << 4 << " " << counter++ << std::endl;
 
 // if (DEBUG_CONDITION)
 //     for (int i = 0; i < local_cc_size; i++) {
@@ -1398,9 +1444,11 @@ if (sem()) {
     const MIdx size = block.GetSize();
     const MIdx end = block.GetEnd();
     if (DEBUG_CONDITION2)
-      std::cout << mpi_rank_ << ": " << 5 << " " << counter++ << std::endl;
+      std::cout << blockID << ": " << 5 << " " << counter++ << std::endl;
 
-
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:13" << std::endl;
+}
 
     if (DEBUG_CONDITION) {
       std::cout << "am in local_cag, size is: " << local_cag.size()
@@ -1417,7 +1465,9 @@ if (sem()) {
       }
     }
 
-
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:14" << std::endl;
+}
 
     /* {
       if (neighbours[kXpositiv] != -1) {
@@ -1462,10 +1512,10 @@ if (sem()) {
     }
 
     if (DEBUG_CONDITION2)
-      std::cout << mpi_rank_ << ": " << 6 << " " << counter++ << std::endl;
+      std::cout << blockID << ": " << 6 << " " << counter++ << std::endl;
 
-    int lowest_local_CAG_Node_id = INT_MAX;
-    int highest_local_CAG_Node_id = INT_MIN;
+    lowest_local_CAG_Node_id = INT_MAX;
+    highest_local_CAG_Node_id = INT_MIN;
 
     for (int i = 0; i < local_cc_size; i++) { // maybe not correctly
                                               // initialized?
@@ -1481,9 +1531,11 @@ if (sem()) {
       if (cclabels[i] > highest_local_CAG_Node_id)
         highest_local_CAG_Node_id = cclabels[i];
     }
-
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:15" << std::endl;
+}
     if (DEBUG_CONDITION2)
-      std::cout << mpi_rank_ << ": " << 7 << " " << counter++ << std::endl;
+      std::cout << blockID << ": " << 7 << " " << counter++ << std::endl;
 
     // calculating reduction tree
     int partners_size = (int)(log(mpi_size_) / log(2.0));
@@ -1491,12 +1543,12 @@ if (sem()) {
         (int)pow(2, partners_size) == mpi_size_ &&
         "mpi_size_ must be power of 2 for the reduction tree (temporarily)");
     if (DEBUG_CONDITION2)
-      std::cout << mpi_rank_ << ": " << 8 << " " << counter++ << std::endl;
+      std::cout << blockID << ": " << 8 << " " << counter++ << std::endl;
 
     {
       int nxt_distance = 1;
       while (nxt_distance < mpi_size_) {
-        int temp = int((mpi_rank_) / nxt_distance);
+        int temp = int((blockID) / nxt_distance);
         int skip = 0;
 
         if (temp % 2 == 1)
@@ -1504,14 +1556,16 @@ if (sem()) {
         else
           skip = nxt_distance;
 
-        partners.push_back(mpi_rank_ + skip);
+        partners.push_back(blockID + skip);
 
         nxt_distance *= 2;
       }
     }
     if (DEBUG_CONDITION2)
-      std::cout << mpi_rank_ << ": " << 9 << " " << counter++ << std::endl;
-
+      std::cout << blockID << ": " << 9 << " " << counter++ << std::endl;
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:16" << std::endl;
+}
     // putting local_cag into cag
 
     for (auto it = local_cag.begin(); it != local_cag.end(); ++it) {
@@ -1528,7 +1582,7 @@ if (sem()) {
 
       for (size_t j = 0; j < (it->second).edge_to.size(); j++) {
         temp.edges.push_back((it->second).edge_to[j]);
-        // std::cout << mpi_rank_ << " putting :" << (it->second).edge_to[j] <<
+        // std::cout << blockID << " putting :" << (it->second).edge_to[j] <<
         // std::endl;
       }
 
@@ -1536,13 +1590,15 @@ if (sem()) {
     }
 
     if (DEBUG_CONDITION2)
-      std::cout << mpi_rank_ << ": " << 10 << " " << counter++ << std::endl;
+      std::cout << blockID << ": " << 10 << " " << counter++ << std::endl;
   }
     // the actual reduction
     for (int index = 0; index < partners_size; index++) {
       if (sem("reduction")){
         int& partner = partners[index];
-
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:17" << std::endl;
+}
         if (DEBUG_CONDITION) {
           std::cout
               << std::endl
@@ -1553,7 +1609,7 @@ if (sem()) {
                     << " ░░░░░░░░░░░░░░░░" << std::endl;
         }
         if (DEBUG_CONDITION2)
-          std::cout << mpi_rank_ << ": " << 11 << " " << counter++ << std::endl;
+          std::cout << blockID << ": " << 11 << " " << counter++ << std::endl;
 
         if (DEBUG_CONDITION) {
           std::cout << std::endl << "current cag:" << std::endl;
@@ -1563,7 +1619,7 @@ if (sem()) {
           std::cout << std::endl;
         }
         if (DEBUG_CONDITION2)
-          std::cout << mpi_rank_ << ": " << 12 << " " << counter++ << std::endl;
+          std::cout << blockID << ": " << 12 << " " << counter++ << std::endl;
 
         // compress cag, to send it over
         compressed_cag.clear();
@@ -1573,6 +1629,9 @@ if (sem()) {
           compressed_cag.push_back(temp.CAG_Node_id);
           compressed_cag.push_back(temp.pointing_to);
 
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:18" << std::endl;
+}
 
           if (DEBUG_CONDITION)
             std::cout << "just put into the compressed cag node: " << compressed_cag.back() << std::endl;
@@ -1583,7 +1642,7 @@ if (sem()) {
           compressed_cag.push_back(-1);
         }
         if (DEBUG_CONDITION2)
-          std::cout << mpi_rank_ << ": " << 13 << " " << counter++ << std::endl;
+          std::cout << blockID << ": " << 13 << " " << counter++ << std::endl;
 
         // send over compressed cag
         // MPI_Request req;
@@ -1591,40 +1650,118 @@ if (sem()) {
         //     compressed_cag.data(), compressed_cag.size(), MPI_INT,
         //     partners[index], 99, m.GetMpiComm(), &req);
         // if (DEBUG_CONDITION2)
-        //   std::cout << mpi_rank_ << ": " << 14 << " " << counter++ << std::endl;
+        //   std::cout << blockID << ": " << 14 << " " << counter++ << std::endl;
       
       }
       if (sem("data_exchange") && m.IsLead()){
-        if (first_reduction){
+        if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:19" << std::endl;
+}
+        if (first_reduction){ //is only true for the very first time.
           first_reduction = false;
+          for (int i = 0; i < collected_recieved_compressed_cags.size();i++){
+            receiver_cag_map[(*collected_recieved_compressed_cags[i])[0]] = collected_recieved_compressed_cags[i];
+          }
         }
 
+        std::vector<std::vector<int>> send_queue(mpi_size_);
+
+        for (auto it = collected_compressed_cags.begin(); it != collected_compressed_cags.end(); ++it) {
+          auto &current_comporessed_cag = **it;
+          int rank_to_send_to = blockID_to_mpi_rank_[current_comporessed_cag[0]];
+          auto &current_send_queue = send_queue[rank_to_send_to];
+
+          current_send_queue.insert(current_send_queue.end(), current_comporessed_cag.begin(), current_comporessed_cag.end());
+          current_send_queue.push_back(-2);
+        }
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:20" << std::endl;
+}
+        std::vector<MPI_Request> requests;
+
+        for (int i = 0; i < send_queue.size(); i++){
+          if (send_queue[i].size() == 0 || i == mpi_rank_)
+            continue;
+          
+          requests.emplace_back();
+          MPI_Isend(send_queue[i].data(), send_queue[i].size(), MPI_INT,i, 969, m.GetMpiComm(), &requests.back());
+
+        }
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:21" << std::endl;
+}
+        for (int i = 0; i < send_queue.size(); i++){
+          if (send_queue[i].size() == 0 || i == mpi_rank_)
+            continue;
+          
+          MPI_Status recv_status;
+          MPI_Probe(i, 969, m.GetMpiComm(), &recv_status);
+          int recv_size = -1;
+          MPI_Get_count(&recv_status, MPI_INT, &recv_size);
+          std::vector<int> recieved_cag(recv_size);
+          MPI_Recv(recieved_cag.data(), recv_size, MPI_INT, i, 969 ,m.GetMpiComm(), MPI_STATUS_IGNORE);
+
+          int index = 0;
+          while (index < recv_size) {
+            int receiver_block = recieved_cag[index++];
+            auto &current_received_compressed_cag = *(receiver_cag_map.at(receiver_block));
+
+            current_received_compressed_cag.clear();
+
+            while(true){
+              if (recieved_cag[index++] == -2)
+                break;
+
+              current_received_compressed_cag.push_back(recieved_cag[index-1]);
+            }
+          }
+        }
+if (DEBUG_CONDITION2){
+  std::cout << blockID << ": condition2:22" << std::endl;
+}
+        auto &recieved_cag = send_queue[mpi_rank_];
+        int index = 0;
+        while (index < recieved_cag.size()) {
+          int receiver_block = recieved_cag[index++];
+          auto &current_received_compressed_cag = *(receiver_cag_map.at(receiver_block));
+
+          current_received_compressed_cag.clear();
+
+          while(true){
+            if (recieved_cag[index++] == -2)
+              break;
+
+            current_received_compressed_cag.push_back(recieved_cag[index-1]);
+          }
+        }
+        
+        MPI_Waitall(requests.size(),requests.data(), MPI_STATUSES_IGNORE);
       }
       if (sem("receive & remainder")){
 
         // receiving cag
-        MPI_Status recv_status;
-        MPI_Probe(partners[index], 99, m.GetMpiComm(), &recv_status);
-        int recv_size = -1;
-        MPI_Get_count(&recv_status, MPI_INT, &recv_size);
-        std::vector<int> recieved_cag(recv_size);
-        MPI_Recv(
-            recieved_cag.data(), recv_size, MPI_INT, partners[index], 99,
-            m.GetMpiComm(), MPI_STATUS_IGNORE);
-        if (DEBUG_CONDITION2)
-          std::cout << mpi_rank_ << ": " << 15 << " " << counter++ << std::endl;
+        // MPI_Status recv_status;
+        // MPI_Probe(partners[index], 99, m.GetMpiComm(), &recv_status);
+        // int recv_size = -1;
+        // MPI_Get_count(&recv_status, MPI_INT, &recv_size);
+        // std::vector<int> recieved_cag(recv_size);
+        // MPI_Recv(
+        //     recieved_cag.data(), recv_size, MPI_INT, partners[index], 99,
+        //     m.GetMpiComm(), MPI_STATUS_IGNORE);
+        // if (DEBUG_CONDITION2)
+           std::cout << blockID << ": " << 15 << " " << counter++ << std::endl;
 
         // decompressing and unioning received cag
         if (DEBUG_CONDITION) {
           std::cout << "received cag:" << std::endl;
         }
-        for (int i = 1; i < recv_size;) {
+        for (int i = 0; i < received_compressed_cag.size();) {
           struct CAG_NodeProperties temp;
-          temp.CAG_Node_id = recieved_cag[i++];
-          temp.pointing_to = recieved_cag[i++];
+          temp.CAG_Node_id = received_compressed_cag[i++];
+          temp.pointing_to = received_compressed_cag[i++];
 
           while (true) {
-            CAG_Node CAG_Node = recieved_cag[i++];
+            CAG_Node CAG_Node = received_compressed_cag[i++];
             if (CAG_Node == -1) break;
             temp.edges.push_back(CAG_Node);
           }
@@ -1642,7 +1779,7 @@ if (sem()) {
           std::cout << std::endl;
         }
         if (DEBUG_CONDITION2)
-          std::cout << mpi_rank_ << ": " << 16 << " " << counter++ << std::endl;
+          std::cout << blockID << ": " << 16 << " " << counter++ << std::endl;
 
         // contracting all possible edges
         if (DEBUG_CONDITION) {
@@ -1685,7 +1822,7 @@ if (sem()) {
           std::cout << std::endl;
         }
         if (DEBUG_CONDITION2)
-          std::cout << mpi_rank_ << ": " << 17 << " " << counter++ << std::endl;
+          std::cout << blockID << ": " << 17 << " " << counter++ << std::endl;
 
         // remove all components with no outgoing edges
         if (DEBUG_CONDITION) {
@@ -1731,9 +1868,6 @@ if (sem()) {
           }
           std::cout << std::endl;
         }
-
-        MPI_Wait(&req, MPI_STATUS_IGNORE); // just because not wanting to delete
-                                          // the data before it was sent.
       }
     }
 
