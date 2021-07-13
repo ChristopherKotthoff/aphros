@@ -1812,6 +1812,7 @@ void RecolorDistributed(
     bool unionfind, bool reduce, bool grid, M& m) {
   auto sem = m.GetSem("recolor");
   int blockID = m.GetId();
+  std::cout << m.GetId() << std::endl;
   if (DEBUG_CONDITION2) {
     std::cout << blockID << ": condition2:-2" << std::endl;
   }
@@ -1829,6 +1830,8 @@ void RecolorDistributed(
     Multi<FieldCell<Scal>> fccl_new;
     std::vector<int> compressed_cag;
     std::vector<int> received_compressed_cag;
+
+    int neighbours[6];
 
     // Pointers to objects from other local blocks:
     std::vector<std::vector<int>*> collected_compressed_cags;
@@ -1859,6 +1862,7 @@ void RecolorDistributed(
       ctx->collected_recieved_compressed_cags;
   auto& first_reduction = ctx->first_reduction;
   auto& receiver_cag_map = ctx->receiver_cag_map;
+  auto& neighbours = ctx->neighbours;
 
   auto& lowest_local_CAG_Node_id = ctx->lowest_local_CAG_Node_id;
   auto& highest_local_CAG_Node_id = ctx->highest_local_CAG_Node_id;
@@ -1935,7 +1939,7 @@ void RecolorDistributed(
     if (DEBUG_CONDITION2) {
       std::cout << blockID << ": condition2:5" << std::endl;
     }
-    int neighbours[6];
+
     {
       if (my_x + 1 < m.flags.global_blocks[0])
         neighbours[kXpositiv] = COORD_TO_BLOCKID(my_x + 1, my_y, my_z);
@@ -2122,7 +2126,7 @@ void RecolorDistributed(
       std::cout << blockID << ": condition2:14" << std::endl;
     }
 
-    /* {
+    {
       if (neighbours[kXpositiv] != -1) {
         int ix = end[0]-1;
         CAG_CONSTRUCTION((index, ix, iy-1, iz-1),(index, ix, iy-1, iz),(index,
@@ -2165,7 +2169,7 @@ void RecolorDistributed(
     iy-1, iz),(index, ix+1, iy, iz),(index, ix+1, iy+1, iz),(index,
     ix,iy,iz-1),iy,1,ix,0);
       }
-    } */
+    } 
 
     if (DEBUG_CONDITION) {
       std::cout << "am in local_cag, size is: " << local_cag.size()
@@ -2209,7 +2213,7 @@ void RecolorDistributed(
       std::cout << blockID << ": " << 7 << " " << counter++ << std::endl;
 
     // calculating reduction tree
-    int partners_size = (int)(log(mpi_size_) / log(2.0));
+    partners_size = (int)(log(mpi_size_) / log(2.0));
     assert(
         (int)pow(2, partners_size) == mpi_size_ &&
         "mpi_size_ must be power of 2 for the reduction tree (temporarily)");
@@ -2413,7 +2417,7 @@ void RecolorDistributed(
 
       MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
     }
-    if (sem("receive & remainder")) {
+    if (sem("receive_and_remainder")) {
       // receiving cag
       // MPI_Status recv_status;
       // MPI_Probe(partners[index], 99, m.GetMpiComm(), &recv_status);
@@ -2545,7 +2549,7 @@ void RecolorDistributed(
       }
     }
   }
-
+if (sem("domain_overwrite")){
   for (auto l : layers) {
     for (auto c : m.Cells()) {
       if (fccl_new[l][c] != kClNone) {
@@ -2562,4 +2566,5 @@ void RecolorDistributed(
       }
     }
   }
+}
 }
