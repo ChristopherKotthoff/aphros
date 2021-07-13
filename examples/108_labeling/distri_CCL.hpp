@@ -1,3 +1,7 @@
+// Created by Christopher Kotthoff on 13.07.2021
+// Copyright 2019 ETH Zurich
+
+
 #include <iostream>
 
 #include <fstream>
@@ -1418,8 +1422,8 @@
   (x) + (y)*m.flags.global_blocks[0] + \
       (z)*m.flags.global_blocks[0] * m.flags.global_blocks[1]
 
-#define DEBUG_CONDITION blockID == -1
-#define DEBUG_CONDITION2 blockID != -1
+#define DEBUG_CONDITION blockID == 0
+#define DEBUG_CONDITION2 blockID == 0
 
 typedef int CAG_Node;
 
@@ -1431,10 +1435,6 @@ using IndexCells = GIndex<IdxCell, 3>;
 
 int kBlockSize = -1;
 int kDimensions[] = {-1, -1, -1};
-
-int blockID_to_mpi_rank_[] = {
-    0, 0, 1, 1}; // mpirun -n 2 --oversubscribe ./main --nx 64 --ny 64 --nz 32
-                 // --bs 32 --layers 1
 
 constexpr double kClNone = -1;
 
@@ -1539,7 +1539,7 @@ void MergeLabels(
   }
 }
 
-void DoTwoPass(
+/* void DoTwoPass(
     const GRange<size_t>& layers, const Multi<FieldCell<Scal>*>& fccl,
     Multi<FieldCell<Scal>>& fccl_new, std::vector<int>& union_find_array,
     int start_color, std::vector<CAG_Node>& cclabels, M& m) {
@@ -1583,13 +1583,14 @@ void DoTwoPass(
     }
   }
 }
-
-/* void DoTwoPass(
+ */
+void DoTwoPass(
     const GRange<size_t>& layers, const Multi<FieldCell<Scal>*>& fccl,
-Multi<FieldCell<Scal>> &fccl_new, std::vector<int>& union_find_array, int
-start_color, std::vector<CAG_Node>& cclabels, M& m) {
-
+    Multi<FieldCell<Scal>>& fccl_new, std::vector<int>& union_find_array,
+    int start_color, std::vector<CAG_Node>& cclabels, M& m) {
   int color = 0; // first color given will be 1;
+
+  int blockID = m.GetId();
 
   int merger_size = 0;
   int merger_array[4 * layers.size()];
@@ -1600,7 +1601,6 @@ start_color, std::vector<CAG_Node>& cclabels, M& m) {
   const MIdx size = block.GetSize();
   const MIdx end = block.GetEnd();
 
-
   { // z:start
     int iz = start[2];
 
@@ -1608,102 +1608,119 @@ start_color, std::vector<CAG_Node>& cclabels, M& m) {
       int iy = start[1];
 
       for (auto l : layers) // x:start y:start z:start
-        if
-((*fccl[l])[getCellFromIndex(index,start[0],start[1],start[2])]!=kClNone) {
-          fccl_new[l][getCellFromIndex(index,start[0],start[1],start[2])] =
-++color; union_find_array.push_back(color);
+        if ((*fccl[l])[getCellFromIndex(index, start[0], start[1], start[2])] !=
+            kClNone) {
+          fccl_new[l][getCellFromIndex(index, start[0], start[1], start[2])] =
+              ++color;
+          union_find_array.push_back(color);
         }
 
-      for (int ix = start[0]+1; ix < end[0]; ix++) { // x:middle/end y:start
-z:start CREATE_3D_DECISION_TREE(false, false, false, false, false, false, false,
-false, false, false, false, false, true);
+      for (int ix = start[0] + 1; ix < end[0];
+           ix++) { // x:middle/end y:start z:start
+        CREATE_3D_DECISION_TREE(
+            false, false, false, false, false, false, false, false, false,
+            false, false, false, true);
       }
     }
 
-    for (int iy = start[1]+1; iy < end[1]; iy++) { // y:middle/end z:start
+    for (int iy = start[1] + 1; iy < end[1]; iy++) { // y:middle/end z:start
       { // x:start y:middle/end z:start
         int ix = start[0];
-        CREATE_3D_DECISION_TREE(false, false, false, false, false, false, false,
-false, false, false, true, true, false);
+        CREATE_3D_DECISION_TREE(
+            false, false, false, false, false, false, false, false, false,
+            false, true, true, false);
       }
 
-      for (int ix = start[0]+1; ix < end[0]-1; ix++) { // x:middle y:middle/end
-z:start CREATE_3D_DECISION_TREE(false, false, false, false, false, false, false,
-false, false, true, true, true, true);
+      for (int ix = start[0] + 1; ix < end[0] - 1;
+           ix++) { // x:middle y:middle/end z:start
+        CREATE_3D_DECISION_TREE(
+            false, false, false, false, false, false, false, false, false, true,
+            true, true, true);
       }
 
       { // x:end y:middle/end z:start
-        int ix = end[0]-1;
-        CREATE_3D_DECISION_TREE(false, false, false, false, false, false, false,
-false, false, true, true, false, true);
+        int ix = end[0] - 1;
+        CREATE_3D_DECISION_TREE(
+            false, false, false, false, false, false, false, false, false, true,
+            true, false, true);
       }
     }
-
   }
 
-  for (int iz = start[2]+1; iz < end[2]; iz++) { // z:middle/end
+  for (int iz = start[2] + 1; iz < end[2]; iz++) { // z:middle/end
     { // y:start z:middle/end
       int iy = start[1];
 
       { // x:start y:start z:middle/end
         int ix = start[0];
-        CREATE_3D_DECISION_TREE(false, false, false, false, true, true, false,
-true, true, false, false, false, false);
+        CREATE_3D_DECISION_TREE(
+            false, false, false, false, true, true, false, true, true, false,
+            false, false, false);
       }
 
-      for (int ix = start[0]+1; ix < end[0]-1; ix++){ // x:middle y:start
-z:middle/end CREATE_3D_DECISION_TREE(false, false, false, true, true, true,
-true, true, true, false, false, false, true);
+      for (int ix = start[0] + 1; ix < end[0] - 1;
+           ix++) { // x:middle y:start z:middle/end
+        CREATE_3D_DECISION_TREE(
+            false, false, false, true, true, true, true, true, true, false,
+            false, false, true);
       }
 
       { // x:end y:start z:middle/end
-        int ix = end[0]-1;
-        CREATE_3D_DECISION_TREE(false, false, false, true, true, false, true,
-true, false, false, false, false, true);
+        int ix = end[0] - 1;
+        CREATE_3D_DECISION_TREE(
+            false, false, false, true, true, false, true, true, false, false,
+            false, false, true);
       }
-
     }
 
-    for (int iy = start[1]+1; iy < end[1]-1; iy++){ // y:middle z:middle/end
+    for (int iy = start[1] + 1; iy < end[1] - 1;
+         iy++) { // y:middle z:middle/end
       { // x:start y:middle z:middle/end
         int ix = start[0];
-        CREATE_3D_DECISION_TREE(false, true, true, false, true, true, false,
-true, true, false, true, true, false);
+        CREATE_3D_DECISION_TREE(
+            false, true, true, false, true, true, false, true, true, false,
+            true, true, false);
       }
 
-      for (int ix = start[0]+1; ix < end[0]-1; ix++){ // x:middle y:middle
-z:middle/end CREATE_3D_DECISION_TREE(true, true, true, true, true, true, true,
-true, true, true, true, true, true);
+      for (int ix = start[0] + 1; ix < end[0] - 1;
+           ix++) { // x:middle y:middle z:middle/end
+        CREATE_3D_DECISION_TREE(
+            true, true, true, true, true, true, true, true, true, true, true,
+            true, true);
       }
 
       { // x:end y:middle z:middle/end
-        int ix = end[0]-1;
-        CREATE_3D_DECISION_TREE(true, true, false, true, true, false, true,
-true, false, true, true, false, true);
+        int ix = end[0] - 1;
+        CREATE_3D_DECISION_TREE(
+            true, true, false, true, true, false, true, true, false, true, true,
+            false, true);
       }
     }
 
     { // y:end z:middle/end
-      int iy = end[1]-1;
+      int iy = end[1] - 1;
 
       { // x:start y:end z:middle/end
         int ix = start[0];
-        CREATE_3D_DECISION_TREE(false, true, true, false, true, true, false,
-false, false, false, true, true, false);
+        CREATE_3D_DECISION_TREE(
+            false, true, true, false, true, true, false, false, false, false,
+            true, true, false);
       }
 
-      for (int ix = start[0]+1; ix < end[0]-1; ix++){ // x:middle y:end
-z:middle/end CREATE_3D_DECISION_TREE(true, true, true, true, true, true, false,
-false, false, true, true, true, true);
+      for (int ix = start[0] + 1; ix < end[0] - 1;
+           ix++) { // x:middle y:end z:middle/end
+        CREATE_3D_DECISION_TREE(
+            true, true, true, true, true, true, false, false, false, true, true,
+            true, true);
       }
 
       { // x:end y:end z:middle/end
-        int ix = end[0]-1;
-        CREATE_3D_DECISION_TREE(true, true, false, true, true, false, false,
-false, false, true, true, false, true);
+        int ix = end[0] - 1;
+        CREATE_3D_DECISION_TREE(
+            true, true, false, true, true, false, false, false, false, true,
+            true, false, true);
       }
     }
-
   }
 
   int* look_up_table = new int[union_find_array.size()];
@@ -1713,48 +1730,45 @@ false, false, true, true, false, true);
       union_find_array.data(), look_up_table, union_find_array.size(), cclabels,
       start_color);
 
+  // std::cout << std::endl << std::endl << "union_find_array:";
+  // for (size_t i = 0; i < union_find_array.size();i++)
+  //   std::cout << union_find_array[i] << " ";
 
-    // std::cout << std::endl << std::endl << "union_find_array:";
-    // for (size_t i = 0; i < union_find_array.size();i++)
-    //   std::cout << union_find_array[i] << " ";
+  // std::cout << std::endl << std::endl << "look_up_table:";
+  // for (size_t i = 0; i < union_find_array.size();i++)
+  //   std::cout << look_up_table[i] << " ";
+  // if (DEBUG_CONDITION2){
+  //   for (auto l : layers) {
+  //     for (auto c : m.Cells()) {
+  //       if (fccl_new[l][c] != kClNone) {
+  //         std::cout << (int) fccl_new[l][c] << " ";
+  //       }
+  //     }
+  //   }
+  //   std::cout << std::endl;
+  // }
 
-    // std::cout << std::endl << std::endl << "look_up_table:";
-    // for (size_t i = 0; i < union_find_array.size();i++)
-    //   std::cout << look_up_table[i] << " ";
-    // if (DEBUG_CONDITION2){
-    //   for (auto l : layers) {
-    //     for (auto c : m.Cells()) {
-    //       if (fccl_new[l][c] != kClNone) {
-    //         std::cout << (int) fccl_new[l][c] << " ";
-    //       }
-    //     }
-    //   }
-    //   std::cout << std::endl;
-    // }
-
-    for (auto l : layers) {
-      for (auto c : m.Cells()) {
-        if (fccl_new[l][c] != kClNone) {
-          fccl_new[l][c] = look_up_table[(int)(fccl_new[l][c]) - 1];
-        }
+  for (auto l : layers) {
+    for (auto c : m.Cells()) {
+      if (fccl_new[l][c] != kClNone) {
+        fccl_new[l][c] = look_up_table[(int)(fccl_new[l][c]) - 1];
       }
     }
+  }
 
-    //  if (DEBUG_CONDITION2){
-    //   for (auto l : layers) {
-    //     for (auto c : m.Cells()) {
-    //       if (fccl_new[l][c] != kClNone) {
-    //         std::cout << (int) fccl_new[l][c] << " ";
-    //       }
-    //     }
-    //   }
-    //   std::cout << std::endl;
-    // }
+  //  if (DEBUG_CONDITION2){
+  //   for (auto l : layers) {
+  //     for (auto c : m.Cells()) {
+  //       if (fccl_new[l][c] != kClNone) {
+  //         std::cout << (int) fccl_new[l][c] << " ";
+  //       }
+  //     }
+  //   }
+  //   std::cout << std::endl;
+  // }
 
   delete[] look_up_table;
 }
-
- */
 
 int CagFind(
     int CAG_Node_id, std::unordered_map<CAG_Node, CAG_NodeProperties>& cag) {
@@ -2128,48 +2142,60 @@ void RecolorDistributed(
 
     {
       if (neighbours[kXpositiv] != -1) {
-        int ix = end[0]-1;
-        CAG_CONSTRUCTION((index, ix, iy-1, iz-1),(index, ix, iy-1, iz),(index,
-    ix, iy-1, iz+1),(index, ix, iy, iz-1),(index, ix, iy, iz+1),(index, ix,
-    iy+1, iz-1),(index, ix, iy+1, iz),(index, ix, iy+1, iz+1),(index,
-    ix+1,iy,iz),iz,2,iy,1);
+        int ix = end[0] - 1;
+        CAG_CONSTRUCTION(
+            (index, ix, iy - 1, iz - 1), (index, ix, iy - 1, iz),
+            (index, ix, iy - 1, iz + 1), (index, ix, iy, iz - 1),
+            (index, ix, iy, iz + 1), (index, ix, iy + 1, iz - 1),
+            (index, ix, iy + 1, iz), (index, ix, iy + 1, iz + 1),
+            (index, ix + 1, iy, iz), iz, 2, iy, 1);
       }
       if (neighbours[kXnegativ] != -1) {
         int ix = start[0];
-        CAG_CONSTRUCTION((index, ix, iy-1, iz-1),(index, ix, iy-1, iz),(index,
-    ix, iy-1, iz+1),(index, ix, iy, iz-1),(index, ix, iy, iz+1),(index, ix,
-    iy+1, iz-1),(index, ix, iy+1, iz),(index, ix, iy+1, iz+1),(index,
-    ix-1,iy,iz),iz,2,iy,1);
+        CAG_CONSTRUCTION(
+            (index, ix, iy - 1, iz - 1), (index, ix, iy - 1, iz),
+            (index, ix, iy - 1, iz + 1), (index, ix, iy, iz - 1),
+            (index, ix, iy, iz + 1), (index, ix, iy + 1, iz - 1),
+            (index, ix, iy + 1, iz), (index, ix, iy + 1, iz + 1),
+            (index, ix - 1, iy, iz), iz, 2, iy, 1);
       }
       if (neighbours[kYpositiv] != -1) {
-        int iy = end[1]-1;
-        CAG_CONSTRUCTION((index, ix-1, iy, iz-1),(index, ix-1, iy, iz),(index,
-    ix-1, iy, iz+1),(index, ix, iy, iz-1),(index, ix, iy, iz+1),(index, ix+1,
-    iy, iz-1),(index, ix+1, iy, iz),(index, ix+1, iy, iz+1),(index,
-    ix,iy+1,iz),iz,2,ix,0);
+        int iy = end[1] - 1;
+        CAG_CONSTRUCTION(
+            (index, ix - 1, iy, iz - 1), (index, ix - 1, iy, iz),
+            (index, ix - 1, iy, iz + 1), (index, ix, iy, iz - 1),
+            (index, ix, iy, iz + 1), (index, ix + 1, iy, iz - 1),
+            (index, ix + 1, iy, iz), (index, ix + 1, iy, iz + 1),
+            (index, ix, iy + 1, iz), iz, 2, ix, 0);
       }
       if (neighbours[kYnegativ] != -1) {
         int iy = start[1];
-        CAG_CONSTRUCTION((index, ix-1, iy, iz-1),(index, ix-1, iy, iz),(index,
-    ix-1, iy, iz+1),(index, ix, iy, iz-1),(index, ix, iy, iz+1),(index, ix+1,
-    iy, iz-1),(index, ix+1, iy, iz),(index, ix+1, iy, iz+1),(index,
-    ix,iy-1,iz),iz,2,ix,0);
+        CAG_CONSTRUCTION(
+            (index, ix - 1, iy, iz - 1), (index, ix - 1, iy, iz),
+            (index, ix - 1, iy, iz + 1), (index, ix, iy, iz - 1),
+            (index, ix, iy, iz + 1), (index, ix + 1, iy, iz - 1),
+            (index, ix + 1, iy, iz), (index, ix + 1, iy, iz + 1),
+            (index, ix, iy - 1, iz), iz, 2, ix, 0);
       }
       if (neighbours[kZpositiv] != -1) {
-        int iz = end[2]-1;
-        CAG_CONSTRUCTION((index, ix-1, iy-1, iz),(index, ix-1, iy, iz),(index,
-    ix-1, iy+1, iz),(index, ix, iy-1, iz),(index, ix, iy+1, iz),(index, ix+1,
-    iy-1, iz),(index, ix+1, iy, iz),(index, ix+1, iy+1, iz),(index,
-    ix,iy,iz+1),iy,1,ix,0);
+        int iz = end[2] - 1;
+        CAG_CONSTRUCTION(
+            (index, ix - 1, iy - 1, iz), (index, ix - 1, iy, iz),
+            (index, ix - 1, iy + 1, iz), (index, ix, iy - 1, iz),
+            (index, ix, iy + 1, iz), (index, ix + 1, iy - 1, iz),
+            (index, ix + 1, iy, iz), (index, ix + 1, iy + 1, iz),
+            (index, ix, iy, iz + 1), iy, 1, ix, 0);
       }
       if (neighbours[kZnegativ] != -1) {
         int iz = start[2];
-        CAG_CONSTRUCTION((index, ix-1, iy-1, iz),(index, ix-1, iy, iz),(index,
-    ix-1, iy+1, iz),(index, ix, iy-1, iz),(index, ix, iy+1, iz),(index, ix+1,
-    iy-1, iz),(index, ix+1, iy, iz),(index, ix+1, iy+1, iz),(index,
-    ix,iy,iz-1),iy,1,ix,0);
+        CAG_CONSTRUCTION(
+            (index, ix - 1, iy - 1, iz), (index, ix - 1, iy, iz),
+            (index, ix - 1, iy + 1, iz), (index, ix, iy - 1, iz),
+            (index, ix, iy + 1, iz), (index, ix + 1, iy - 1, iz),
+            (index, ix + 1, iy, iz), (index, ix + 1, iy + 1, iz),
+            (index, ix, iy, iz - 1), iy, 1, ix, 0);
       }
-    } 
+    }
 
     if (DEBUG_CONDITION) {
       std::cout << "am in local_cag, size is: " << local_cag.size()
@@ -2213,16 +2239,21 @@ void RecolorDistributed(
       std::cout << blockID << ": " << 7 << " " << counter++ << std::endl;
 
     // calculating reduction tree
-    partners_size = (int)(log(mpi_size_) / log(2.0));
+
+    int blocks = m.flags.global_blocks[0] * m.flags.global_blocks[1] *
+                 m.flags.global_blocks[2];
+
+    partners_size = (int)(log(blocks) / log(2.0));
     assert(
-        (int)pow(2, partners_size) == mpi_size_ &&
-        "mpi_size_ must be power of 2 for the reduction tree (temporarily)");
+        (int)pow(2, partners_size) == blocks &&
+        "Amount of blocks must be power of 2 for the reduction tree "
+        "(temporarily)");
     if (DEBUG_CONDITION2)
       std::cout << blockID << ": " << 8 << " " << counter++ << std::endl;
 
     {
       int nxt_distance = 1;
-      while (nxt_distance < mpi_size_) {
+      while (nxt_distance < blocks) {
         int temp = int((blockID) / nxt_distance);
         int skip = 0;
 
@@ -2270,6 +2301,7 @@ void RecolorDistributed(
   // the actual reduction
   for (int index = 0; index < partners_size; index++) {
     if (sem("reduction")) {
+      std::cout << blockID << ": PARTNERS: " << partners_size << std::endl;
       int& partner = partners[index];
       if (DEBUG_CONDITION2) {
         std::cout << blockID << ": condition2:17" << std::endl;
@@ -2345,7 +2377,7 @@ void RecolorDistributed(
       for (auto it = collected_compressed_cags.begin();
            it != collected_compressed_cags.end(); ++it) {
         auto& current_comporessed_cag = **it;
-        int rank_to_send_to = blockID_to_mpi_rank_[current_comporessed_cag[0]];
+        int rank_to_send_to = m.GetMpiRankFromId(current_comporessed_cag[0]);
         auto& current_send_queue = send_queue[rank_to_send_to];
 
         current_send_queue.insert(
@@ -2549,22 +2581,23 @@ void RecolorDistributed(
       }
     }
   }
-if (sem("domain_overwrite")){
-  for (auto l : layers) {
-    for (auto c : m.Cells()) {
-      if (fccl_new[l][c] != kClNone) {
-        (*fccl[l])[c] =
-            1 + sin(local_CAG_Nodes_pointer_table[fccl_new[l][c]].pointing_to);
-        //(*fccl[l])[c] =
-        //local_CAG_Nodes_pointer_table[fccl_new[l][c]].pointing_to;
-        // if (DEBUG_CONDITION2) std::cout << "no kCLNone: " << fccl_new[l][c]
-        // << " " << local_CAG_Nodes_pointer_table[fccl_new[l][c]].pointing_to
-        // << std::endl;
-      } else {
-        (*fccl[l])[c] = kClNone;
-        // if (DEBUG_CONDITION2) std::cout << "nothin" << std::endl;
+  if (sem("domain_overwrite")) {
+    for (auto l : layers) {
+      for (auto c : m.Cells()) {
+        if (fccl_new[l][c] != kClNone) {
+          (*fccl[l])[c] =
+              1 +
+              sin(local_CAG_Nodes_pointer_table[fccl_new[l][c]].pointing_to);
+          //(*fccl[l])[c] =
+          // local_CAG_Nodes_pointer_table[fccl_new[l][c]].pointing_to;
+          // if (DEBUG_CONDITION2) std::cout << "no kCLNone: " << fccl_new[l][c]
+          // << " " << local_CAG_Nodes_pointer_table[fccl_new[l][c]].pointing_to
+          // << std::endl;
+        } else {
+          (*fccl[l])[c] = kClNone;
+          // if (DEBUG_CONDITION2) std::cout << "nothin" << std::endl;
+        }
       }
     }
   }
-}
 }
