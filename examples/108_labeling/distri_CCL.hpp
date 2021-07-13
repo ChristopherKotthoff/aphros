@@ -1,5 +1,5 @@
 // Created by Christopher Kotthoff on 13.07.2021
-// Copyright 2019 ETH Zurich
+// Copyright 2021 ETH Zurich
 
 
 #include <iostream>
