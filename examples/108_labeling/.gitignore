@@ -4,6 +4,7 @@
 *.vtk
 *.vts
 *.pvd
+*.log
 arg
 np
 out

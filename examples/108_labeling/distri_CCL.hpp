@@ -39,6 +39,8 @@
 #include <util/format.h>
 #include <util/vof.h>
 
+#include "solver/approx.h"
+
 #define CONDITION_A                                               \
   (*fccl[ln])[getCellFromIndex(index, ix - 1, iy - 1, iz - 1)] != \
       kClNone&& fccl_x ==                                         \
@@ -1468,7 +1470,7 @@ void RecolorDistributed(
 
   int start_color =
       blockID * kBlockSize * kBlockSize * kBlockSize * layers.size();
-  if (sem()) {
+  if (sem("initialisation_stuff")) {
 
     if (verb)
       std::cerr << "recolor: using distributed graph contraction (GC)" << std::endl;
@@ -1533,7 +1535,7 @@ if (DEBUG_CONDITION){
             COORD_TO_BLOCKID(my_x, my_y, my_z - 1 + m.flags.global_blocks[2]);
     }
   }
-  if (sem()) { // two pass and border exchange
+  if (sem("2pass_and_borderExchange")) { // two pass and border exchange
     std::vector<int> union_find_array;
 
     fccl_new.Reinit(layers, m, kClNone);
@@ -1548,8 +1550,13 @@ if (DEBUG_CONDITION){
       m.Comm(&fccl_new[l]);
     }
   }
-
-  if (sem()) { // local cag construction
+  if (sem("reflect")) {
+    // Fill colors in halo cells according to boundary conditions.
+    for (auto l : layers) {
+      BcApply(fccl_new[l], mfc, m);
+    }
+  }
+  if (sem("local_CAG_construction")) { // local cag construction
 
     local_cc_size = cclabels.size();
 

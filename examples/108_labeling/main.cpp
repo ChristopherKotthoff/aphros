@@ -107,8 +107,6 @@ void Run(M& m, Vars& var) {
     MapEmbed<BCond<Scal>> mebc; // boundary conditions for volume fraction
     FieldCell<Scal> fcvf_sum; // sum of volume fractions from all layers
     FieldCell<Scal> fccl_sum; // colors from all layers
-    std::chrono::_V2::system_clock::time_point start;
-    std::chrono::_V2::system_clock::time_point stop;
   } * ctx(sem);
   constexpr Scal kClNone = -1;
   auto& t = *ctx;
@@ -127,9 +125,6 @@ void Run(M& m, Vars& var) {
       }
     }
   }
-  if(sem()){
-    t.start = std::chrono::high_resolution_clock::now();
-  }
   if (sem.Nested()) {
     const bool verbose = false;
     const bool reduce = true;
@@ -145,11 +140,6 @@ void Run(M& m, Vars& var) {
         t.layers, t.fcvf, t.fccl, t.fccl, 0, Vect(0), 1e10, t.mebc, verbose,
         unionfind, reduce, grid, m);
     }
-
-  }
-  if (sem()){
-    t.stop = std::chrono::high_resolution_clock::now();
-    std::cout << (std::chrono::duration_cast<std::chrono::microseconds>(t.stop - t.start)).count() << ",";
   }
   if (sem.Nested()) {
     Dump(t.layers, t.fcvf, "vf", "vf", m);
@@ -176,6 +166,11 @@ void Run(M& m, Vars& var) {
   if (sem.Nested()) {
     Dump(t.fccl_sum, "cl", "cl_sum", m);
   }
+  if (sem()) {
+    int mpi_size;
+    MPI_Comm_size(m.GetMpiComm(), &mpi_size);
+    m.TimerReport(std::to_string((std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count())%31536000)+"_timer_np"+std::to_string(mpi_size)+"_bx"+std::to_string(m.flags.global_blocks[0])+"by"+std::to_string(m.flags.global_blocks[1])+"bz"+std::to_string(m.flags.global_blocks[2])+"_bs"+std::to_string(m.GetInBlockCells().GetSize()[0])+"_new"+std::to_string(use_new_recolor?1:0)+".log");
+  }
 }
 
 int main(int argc, const char** argv) {
@@ -195,7 +190,7 @@ int main(int argc, const char** argv) {
   parser.AddVariable<int>("--nz", 32).Help("Mesh size in the z-direction");
   parser.AddVariable<int>("--bs", 16).Help("Block size");
   parser.AddVariable<int>("--layers", 4).Help("Number of layers");
-  parser.AddVariable<int>("--new_recolor", 1).Help("Use new or old recolor, 1 = true, 0 = false");
+  parser.AddVariable<int>("--new_recolor", 1).Help("Use new recolor, 1 = true, 0 = false");
   auto args = parser.ParseArgs(argc, argv);
   if (const int* p = args.Int.Find("EXIT")) {
     return *p;
