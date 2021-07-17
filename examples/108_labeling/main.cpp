@@ -24,6 +24,10 @@
 
 #include "distri_CCL.hpp"
 
+#include <chrono> //for timing
+#include <time.h> 
+
+
 using M = MeshCartesian<double, 3>;
 using Scal = typename M::Scal;
 using Vect = typename M::Vect;
@@ -34,6 +38,7 @@ static int called_first_dump_ = 0;
 static int called_second_dump_ = 0;
 static int called_run_ = 0;
 static int called_main_ = 0;
+static bool use_new_recolor = false;
 
 void Init(
     GRange<size_t> layers, Multi<FieldCell<Scal>>& fcu, std::string prefix,
@@ -102,6 +107,8 @@ void Run(M& m, Vars& var) {
     MapEmbed<BCond<Scal>> mebc; // boundary conditions for volume fraction
     FieldCell<Scal> fcvf_sum; // sum of volume fractions from all layers
     FieldCell<Scal> fccl_sum; // colors from all layers
+    std::chrono::_V2::system_clock::time_point start;
+    std::chrono::_V2::system_clock::time_point stop;
   } * ctx(sem);
   constexpr Scal kClNone = -1;
   auto& t = *ctx;
@@ -120,104 +127,29 @@ void Run(M& m, Vars& var) {
       }
     }
   }
+  if(sem()){
+    t.start = std::chrono::high_resolution_clock::now();
+  }
   if (sem.Nested()) {
     const bool verbose = false;
     const bool reduce = true;
     const bool unionfind = false;
     const bool grid = false;
-    // UVof<M>().Recolor(
-    //     t.layers, t.fcvf, t.fccl, t.fccl, 0, Vect(0), 1e10, t.mebc, verbose,
-    //     unionfind, reduce, grid, m);
 
-    RecolorDistributed(
+    if (use_new_recolor){
+      RecolorDistributed(
          t.layers, t.fcvf, t.fccl, t.fccl, 0, Vect(0), 1e10, t.mebc, verbose,
          unionfind, reduce, grid, m);
-
-    int mpi_rank_;
-    int mpi_size_;
-    MPI_Comm_rank(m.GetMpiComm(), &mpi_rank_);
-    MPI_Comm_size(m.GetMpiComm(), &mpi_size_);
-    
-    /* FieldCell<Scal> fc(m, 0);
-    std::cout << "block id=" << m.GetId() << std::endl;
-    const auto& index = m.GetIndexCells();
-    const auto& block = m.GetInBlockCells();
-    const MIdx start = block.GetBegin();
-    const MIdx size = block.GetSize();
-    const MIdx end = block.GetEnd();
-    std::cout << util::Format("start={} size={} end={}\n", start, size, end);
-    for (int iz = start[2]; iz < end[2]; ++iz) {
-      for (int iy = start[1]; iy < end[1]; ++iy) {
-        for (int ix = start[0]; ix < end[0]; ++ix) {
-          MIdx w(ix, iy, iz);
-          IdxCell c = index.GetIdx(w);
-          std::cout << w << ' ' << c.raw() << ' ' << fc[c] << std::endl;
-        }
-      }
-    }
-    for (auto c : m.Cells()) {
-      std::cout << "first m.Cells(): " << c.raw() << std::endl;
-      break;
-    }
-    for (auto c : m.AllCells()) {
-      std::cout << "first m.AllCells(): " << c.raw() << std::endl;
-      break;
-    }
-    std::cout << "inner: " << fc[index.GetIdx(MIdx(1, 2, 3))] << std::endl;
-    std::cout << "halo: " << fc[index.GetIdx(MIdx(-1, 2, 3))] << std::endl;
-    exit(9); */
-/*
-    const auto& index = m.GetIndexCells();
-    const auto& block = m.GetInBlockCells();
-    const MIdx start = block.GetBegin();
-    const MIdx size = block.GetSize();
-    const MIdx end = block.GetEnd();
-    bool hassome = false;
-    for (int iz = start[2]; iz < end[2]; ++iz) {
-      for (int iy = start[1]; iy < end[1]; ++iy) {
-        for (int ix = start[0]; ix < end[0]; ++ix) {
-          MIdx w(ix, iy, iz);
-          IdxCell c = index.GetIdx(w);
-          if (t.fcvf[0][c]>-0)
-            hassome = true;
-        }
-      }
-    }
-    if (hassome)
-      std::cout << "has data inside: mpi_rank " << mpi_rank_ << " blockID " << m.GetId() << std::endl;
-*/
-
-
-    /*std::cout << "Just recolored my domain. My rank is " << mpi_rank_
-              << " out of " << mpi_size_ << " with blockID " << m.GetId()
-              << " my pos in space: " 
-              << std::endl;
-
-    int bs = m.GetInBlockCells().GetSize()[0];*/
-
-/*if (mpi_rank_ == 0){
-    std::cout <<std::endl<<std::endl<< "----------------------------";
-    std::cout << "-------------"<< mpi_rank_<<"------------";
-    std::cout << "----------------------------";
-    for (int z = 0; z < bs; z++){
-      for (int y = 0; y < bs; y++){
-        for (int x = 0; x < bs; x++){
-          
-          std::cout << t.fcvf[0].data()[x+y*bs+z*bs*bs] << " ";
-
-        }
-        std::cout << std::endl;
-      }
-      std::cout << "----------------------------"<<std::endl;
-    }
-}*/
-
-    //m.flags.global_blocks.to_string() = 2 2 4
-
-
-    /*distri_CLL::RecolorDistributed(
+    }else{
+      UVof<M>().Recolor(
         t.layers, t.fcvf, t.fccl, t.fccl, 0, Vect(0), 1e10, t.mebc, verbose,
-        unionfind, reduce, grid, m);*/
+        unionfind, reduce, grid, m);
+    }
+
+  }
+  if (sem()){
+    t.stop = std::chrono::high_resolution_clock::now();
+    std::cout << (std::chrono::duration_cast<std::chrono::microseconds>(t.stop - t.start)).count() << ",";
   }
   if (sem.Nested()) {
     Dump(t.layers, t.fcvf, "vf", "vf", m);
@@ -263,10 +195,14 @@ int main(int argc, const char** argv) {
   parser.AddVariable<int>("--nz", 32).Help("Mesh size in the z-direction");
   parser.AddVariable<int>("--bs", 16).Help("Block size");
   parser.AddVariable<int>("--layers", 4).Help("Number of layers");
+  parser.AddVariable<int>("--new_recolor", 1).Help("Use new or old recolor, 1 = true, 0 = false");
   auto args = parser.ParseArgs(argc, argv);
   if (const int* p = args.Int.Find("EXIT")) {
     return *p;
   }
+
+  if (args.Int["new_recolor"])
+    use_new_recolor = true;
 
   std::stringstream conf;
 

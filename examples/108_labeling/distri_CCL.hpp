@@ -603,7 +603,7 @@
       }                                                                        \
       if (merger_size > 1) {                                                   \
         fccl_new[l][getCellFromIndex(index, ix, iy, iz)] = merger_array[0];    \
-        MergeLabels(merger_array, merger_size, union_find_array);              \
+        MergeLabels(merger_array.data(), merger_size, union_find_array);              \
       } else if (merger_size == 1) {                                           \
         fccl_new[l][getCellFromIndex(index, ix, iy, iz)] = merger_array[0];    \
       } else {                                                                 \
@@ -623,7 +623,7 @@
       { /*case slowDimVariable == 0, fastDimVariable == 0*/                    \
         int fastDimVariable = start[fastDimIndex];                             \
         auto& border_cell_value = fccl_new[l][getCellFromIndex direction];     \
-        \ 
+        \
         auto& old_border_cell_value = (*fccl[l])[getCellFromIndex direction];  \
         if (border_cell_value != kClNone) {                                    \
           for (auto ln : layers) {                                             \
@@ -658,7 +658,7 @@
            ++fastDimVariable) { /*case slowDimVariable == 0, fastDimVariable== \
                                    middle*/                                    \
         auto& border_cell_value = fccl_new[l][getCellFromIndex direction];     \
-        \ 
+        \
  auto& old_border_cell_value = (*fccl[l])[getCellFromIndex direction];         \
         if (border_cell_value != kClNone) {                                    \
           for (auto ln : layers) {                                             \
@@ -703,7 +703,7 @@
         int fastDimVariable = end[fastDimIndex] - 1;                           \
                                                                                \
         auto& border_cell_value = fccl_new[l][getCellFromIndex direction];     \
-        \ 
+        \
  auto& old_border_cell_value = (*fccl[l])[getCellFromIndex direction];         \
         if (border_cell_value != kClNone) {                                    \
           for (auto ln : layers) {                                             \
@@ -742,7 +742,7 @@
         int fastDimVariable = start[fastDimIndex];                             \
                                                                                \
         auto& border_cell_value = fccl_new[l][getCellFromIndex direction];     \
-        \ 
+        \
  auto& old_border_cell_value = (*fccl[l])[getCellFromIndex direction];         \
         if (border_cell_value != kClNone) {                                    \
           for (auto ln : layers) {                                             \
@@ -787,7 +787,7 @@
            ++fastDimVariable) { /*case slowDimVariable ==                      \
                                    middle,fastDimVariable == middle*/          \
         auto& border_cell_value = fccl_new[l][getCellFromIndex direction];     \
-        \ 
+        \
  auto& old_border_cell_value = (*fccl[l])[getCellFromIndex direction];         \
         if (border_cell_value != kClNone) {                                    \
           for (auto ln : layers) {                                             \
@@ -847,7 +847,7 @@
         int fastDimVariable = end[fastDimIndex] - 1;                           \
                                                                                \
         auto& border_cell_value = fccl_new[l][getCellFromIndex direction];     \
-        \ 
+        \
  auto& old_border_cell_value = (*fccl[l])[getCellFromIndex direction];         \
         if (border_cell_value != kClNone) {                                    \
           for (auto ln : layers) {                                             \
@@ -895,7 +895,7 @@
         int fastDimVariable = start[fastDimIndex];                             \
                                                                                \
         auto& border_cell_value = fccl_new[l][getCellFromIndex direction];     \
-        \ 
+        \
  auto& old_border_cell_value = (*fccl[l])[getCellFromIndex direction];         \
         if (border_cell_value != kClNone) {                                    \
           for (auto ln : layers) {                                             \
@@ -930,7 +930,7 @@
            ++fastDimVariable) { /*case slowDimVariable == last,                \
                                    fastDimVariable == middle*/                 \
         auto& border_cell_value = fccl_new[l][getCellFromIndex direction];     \
-        \ 
+        \
  auto& old_border_cell_value = (*fccl[l])[getCellFromIndex direction];         \
         if (border_cell_value != kClNone) {                                    \
           for (auto ln : layers) {                                             \
@@ -974,7 +974,7 @@
         int fastDimVariable = end[fastDimIndex] - 1;                           \
                                                                                \
         auto& border_cell_value = fccl_new[l][getCellFromIndex direction];     \
-        \ 
+        \
  auto& old_border_cell_value = (*fccl[l])[getCellFromIndex direction];         \
         if (border_cell_value != kClNone) {                                    \
           for (auto ln : layers) {                                             \
@@ -1011,7 +1011,7 @@
   (x) + (y)*m.flags.global_blocks[0] + \
       (z)*m.flags.global_blocks[0] * m.flags.global_blocks[1]
 
-#define DEBUG_CONDITION blockID == 67
+#define DEBUG_CONDITION false
 
 typedef int CAG_Node;
 
@@ -1122,7 +1122,7 @@ void MergeLabels(
   }
 }
 
-void DoTwoPass(
+/* void DoTwoPass(
     const GRange<size_t>& layers, const Multi<FieldCell<Scal>*>& fccl,
     Multi<FieldCell<Scal>>& fccl_new, std::vector<int>& union_find_array,
     int start_color, std::vector<CAG_Node>& cclabels, M& m) {
@@ -1165,21 +1165,21 @@ void DoTwoPass(
       }
     }
   }
-}
+} */
 
-/* void DoTwoPass(
+void DoTwoPass(
     const GRange<size_t>& layers, const Multi<FieldCell<Scal>*>& fccl,
     Multi<FieldCell<Scal>>& fccl_new, std::vector<int>& union_find_array,
     int start_color, std::vector<CAG_Node>& cclabels, M& m) {
   int color = 0; // first color given will be 1;
 
   int merger_size = 0;
-  int merger_array[4 * layers.size()];
+  std::vector<int> merger_array(4 * layers.size());
 
   const auto& index = m.GetIndexCells();
   const auto& block = m.GetInBlockCells();
   const MIdx start = block.GetBegin();
-  const MIdx size = block.GetSize();
+
   const MIdx end = block.GetEnd();
 
   { // z:start
@@ -1322,7 +1322,7 @@ void DoTwoPass(
   }
 
   delete[] look_up_table;
-} */
+}
 
 int CagFind(
     int CAG_Node_id, std::unordered_map<CAG_Node, CAG_NodeProperties>& cag) {
@@ -1378,6 +1378,15 @@ void RecolorDistributed(
     const Multi<const FieldCell<Scal>*>& fccl_stable, Scal clfixed,
     Vect clfixed_x, Scal coalth, const MapEmbed<BCond<Scal>>& mfc, bool verb,
     bool unionfind, bool reduce, bool grid, M& m) {
+  if (m.GetInBlockCells().GetSize()[0] != m.GetInBlockCells().GetSize()[1] || m.GetInBlockCells().GetSize()[1] != m.GetInBlockCells().GetSize()[2]){
+    if (verb)
+      std::cerr << "recolor: domain not 3D, taking standard iterative approach instead" << std::endl;
+    UVof<M>().Recolor(
+        layers, fcu, fccl, fccl_stable, clfixed, clfixed_x, coalth, mfc, verb,
+        unionfind, reduce, grid, m);
+        return;
+  }
+
   auto sem = m.GetSem("recolor");
   blockID = m.GetId();
 
@@ -1417,7 +1426,6 @@ void RecolorDistributed(
 
   } * ctx(sem);
 
-  auto& t = *ctx;
 
   auto& cclabels = ctx->cclabels;
   auto& local_CAG_Nodes_pointer_table = ctx->local_CAG_Nodes_pointer_table;
@@ -1461,6 +1469,9 @@ void RecolorDistributed(
   int start_color =
       blockID * kBlockSize * kBlockSize * kBlockSize * layers.size();
   if (sem()) {
+
+    if (verb)
+      std::cerr << "recolor: using distributed graph contraction (GC)" << std::endl;
 
     int my_x = blockID % m.flags.global_blocks[0];
     int my_y =
@@ -1574,7 +1585,6 @@ if (DEBUG_CONDITION){
     const auto& index = m.GetIndexCells();
     const auto& block = m.GetInBlockCells();
     const MIdx start = block.GetBegin();
-    const MIdx size = block.GetSize();
     const MIdx end = block.GetEnd();
 
 
@@ -1702,12 +1712,12 @@ if (DEBUG_CONDITION){
 
     partners_size = partners.size();
 
-    std::string temp = "blockID: " + std::to_string(blockID) + ", partners: ";
+    // std::string temp = "blockID: " + std::to_string(blockID) + ", partners: ";
 
-    for (int i=0; i < partners_size;i++){
-      temp.append(std::to_string((int)partners[i])+ ", ");
-    }
-    std::cout << temp << std::endl;
+    // for (int i=0; i < partners_size;i++){
+    //   temp.append(std::to_string((int)partners[i])+ ", ");
+    // }
+    // std::cout << temp << std::endl;
 
 
     // putting local_cag into cag
@@ -1758,25 +1768,32 @@ if (DEBUG_CONDITION){
       // compress cag, to send it over
       compressed_cag.clear();
       compressed_cag.push_back(partner);
+      if (index == partners_size-1 && blockID < blocks-greatest_pow_of_2){
+        //special sending of remote_pointer_table
+        for (auto it = remote_CAG_Nodes_pointer_table.begin(); it != remote_CAG_Nodes_pointer_table.end(); ++it) {
+          compressed_cag.push_back((it->second).CAG_Node_id);
+          compressed_cag.push_back((it->second).pointing_to);
+        }
+      }else{
 
-      if (partner != -1){
-        for (auto it = cag.begin(); it != cag.end(); ++it) {
-          struct CAG_NodeProperties& temp = it->second;
-          compressed_cag.push_back(temp.CAG_Node_id);
-          compressed_cag.push_back(temp.pointing_to);
+        if (partner != -1){
+          for (auto it = cag.begin(); it != cag.end(); ++it) {
+            struct CAG_NodeProperties& temp = it->second;
+            compressed_cag.push_back(temp.CAG_Node_id);
+            compressed_cag.push_back(temp.pointing_to);
 
 
-          if (DEBUG_CONDITION)
-            std::cout << "just put into the compressed cag node: "
-                      << compressed_cag.back() << std::endl;
+            if (DEBUG_CONDITION)
+              std::cout << "just put into the compressed cag node: "
+                        << compressed_cag.back() << std::endl;
 
-          for (size_t j = 0; j < temp.edges.size(); j++)
-            if (temp.edges[j] != -1) compressed_cag.push_back(temp.edges[j]);
+            for (size_t j = 0; j < temp.edges.size(); j++)
+              if (temp.edges[j] != -1) compressed_cag.push_back(temp.edges[j]);
 
-          compressed_cag.push_back(-1);
+            compressed_cag.push_back(-1);
+          }
         }
       }
-
       // send over compressed cag
       // MPI_Request req;
       // MPI_Isend(
@@ -1787,7 +1804,7 @@ if (DEBUG_CONDITION){
       
       if (first_reduction) { // is only true for the very first time.
         first_reduction = false;
-        for (int i = 0; i < collected_recieved_compressed_cags.size(); i++) {
+        for (size_t i = 0; i < collected_recieved_compressed_cags.size(); i++) {
           receiver_cag_map[(*collected_recieved_compressed_cags[i])[0]] =
               collected_recieved_compressed_cags[i];
         }
@@ -1813,7 +1830,7 @@ if (DEBUG_CONDITION){
       }
 
       std::vector<MPI_Request> requests;
-      for (int i = 0; i < send_queue.size(); i++) {
+      for (int i = 0; (size_t)i < send_queue.size(); i++) {
         if (send_queue[i].size() == 0 || i == mpi_rank_) continue;
         // if (blockID == 4) std::cout << "sending to: " << i<< std::endl;
 
@@ -1823,7 +1840,7 @@ if (DEBUG_CONDITION){
             m.GetMpiComm(), &requests.back());
       }
 
-      for (int i = 0; i < send_queue.size(); i++) {
+      for (int i = 0; (size_t)i < send_queue.size(); i++) {
         if (send_queue[i].size() == 0 || i == mpi_rank_) continue;
 
         MPI_Status recv_status;
@@ -1852,7 +1869,7 @@ if (DEBUG_CONDITION){
       }
 
       auto& recieved_cag = send_queue[mpi_rank_];
-      int index = 0;
+      size_t index = 0;
       while (index < recieved_cag.size()) {
         int receiver_block = recieved_cag[index++];
         auto& current_received_compressed_cag =
@@ -1883,161 +1900,178 @@ if (DEBUG_CONDITION){
 
       // decompressing and unioning received cag
       bool recv_from_outlier = false;
-      if (index == 0 && greatest_pow_of_2 != blocks && blockID < blocks-greatest_pow_of_2){
+      if (index == 0 &&  blockID < blocks-greatest_pow_of_2){
         recv_from_outlier = true;
         lowest_remote_CAG_Node_id = INT_MAX;
         highest_remote_CAG_Node_id = INT_MIN;
         remote_cc_size = 0;
-        }
-
-      if (DEBUG_CONDITION) {
-        std::cout << "received cag:" << std::endl;
       }
-      for (int i = 0; i < received_compressed_cag.size();) {
-        struct CAG_NodeProperties temp;
-        temp.CAG_Node_id = received_compressed_cag[i++];
-        temp.pointing_to = received_compressed_cag[i++];
 
-        if (recv_from_outlier){
-          remote_cc_size++;
+      bool last_recv_from_inlier = false;
+      if (index == partners_size-1 && blockID >= greatest_pow_of_2){
+        last_recv_from_inlier = true;
+      }
 
-          struct CAG_NodesPointerTable temp2;
-          temp2.CAG_Node_id = temp.CAG_Node_id;
-          temp2.pointing_to = temp.pointing_to;
-
-          assert(temp2.CAG_Node_id == temp2.pointing_to && "have to be same, makes no sense otherwise..");
-
-          remote_CAG_Nodes_pointer_table[temp.CAG_Node_id] = temp2;
-
-          if (temp.CAG_Node_id < lowest_remote_CAG_Node_id)
-            lowest_remote_CAG_Node_id = temp.CAG_Node_id;
-          if (temp.CAG_Node_id > highest_remote_CAG_Node_id)
-            highest_remote_CAG_Node_id = temp.CAG_Node_id;
-        }
-
-        while (true) {
-          CAG_Node CAG_Node = received_compressed_cag[i++];
-          if (CAG_Node == -1) break;
-          temp.edges.push_back(CAG_Node);
-        }
+      if (!last_recv_from_inlier){
         if (DEBUG_CONDITION) {
-          std::cout << "└─" << temp.ToString() << std::endl;
+          std::cout << "received cag:" << std::endl;
         }
-        cag[temp.CAG_Node_id] = temp;
-      }
 
-      if (DEBUG_CONDITION) {
-        std::cout << std::endl << "current cag:" << std::endl;
-        for (auto it = cag.begin(); it != cag.end(); ++it) {
-          std::cout << "└─" << it->second.ToString() << std::endl;
-        }
-        std::cout << std::endl;
-      }
+        if (index == 0 && blockID >= greatest_pow_of_2){
+          cag.clear();
+        }else{
+          for (size_t i = 0; i < received_compressed_cag.size();) {
+            struct CAG_NodeProperties temp;
+            temp.CAG_Node_id = received_compressed_cag[i++];
+            temp.pointing_to = received_compressed_cag[i++];
 
-      // contracting all possible edges
-      if (DEBUG_CONDITION) {
-        std::cout << std::endl
-                  << "contracting all possible edges:" << std::endl;
-      }
-      std::unordered_set<CAG_Node> has_outgoing_edges_left;
-      for (auto it = cag.begin(); it != cag.end(); ++it) {
-        struct CAG_NodeProperties& temp = it->second;
-        for (size_t i = 0; i < temp.edges.size(); i++) {
-          CAG_Node& from = temp.CAG_Node_id;
-          CAG_Node& to = temp.edges[i];
+            if (recv_from_outlier){
+              remote_cc_size++;
 
-          if (to == -1) continue;
+              struct CAG_NodesPointerTable temp2;
+              temp2.CAG_Node_id = temp.CAG_Node_id;
+              temp2.pointing_to = temp.pointing_to;
 
-          // check if it's an outgoing edge, if yes, abort
-          auto it_to = cag.find(to);
-          if (it_to == cag.end()) {
-            if (DEBUG_CONDITION) {
-              std::cout << "└─detected outgoing edge from " << from << " to "
-                        << to << std::endl;
+              assert(temp2.CAG_Node_id == temp2.pointing_to && "have to be same, makes no sense otherwise..");
+
+              remote_CAG_Nodes_pointer_table[temp.CAG_Node_id] = temp2;
+
+              if (temp.CAG_Node_id < lowest_remote_CAG_Node_id)
+                lowest_remote_CAG_Node_id = temp.CAG_Node_id;
+              if (temp.CAG_Node_id > highest_remote_CAG_Node_id)
+                highest_remote_CAG_Node_id = temp.CAG_Node_id;
             }
-            has_outgoing_edges_left.insert(temp.CAG_Node_id);
-            continue;
-          }
 
-          if (DEBUG_CONDITION) {
-            std::cout << "└─unioning " << from << " and " << to << std::endl;
+            while (true) {
+              CAG_Node CAG_Node = received_compressed_cag[i++];
+              if (CAG_Node == -1) break;
+              temp.edges.push_back(CAG_Node);
+            }
+            if (DEBUG_CONDITION) {
+              std::cout << "└─" << temp.ToString() << std::endl;
+            }
+            cag[temp.CAG_Node_id] = temp;
           }
-          CagDoUnion(from, to, cag);
-          to = -1;
         }
-      }
 
-      if (DEBUG_CONDITION) {
-        std::cout << std::endl << "current cag:" << std::endl;
+        if (DEBUG_CONDITION) {
+          std::cout << std::endl << "current cag:" << std::endl;
+          for (auto it = cag.begin(); it != cag.end(); ++it) {
+            std::cout << "└─" << it->second.ToString() << std::endl;
+          }
+          std::cout << std::endl;
+        }
+
+        // contracting all possible edges
+        if (DEBUG_CONDITION) {
+          std::cout << std::endl
+                    << "contracting all possible edges:" << std::endl;
+        }
+        std::unordered_set<CAG_Node> has_outgoing_edges_left;
         for (auto it = cag.begin(); it != cag.end(); ++it) {
-          std::cout << "└─" << it->second.ToString() << std::endl;
-        }
-        std::cout << std::endl;
-      }
+          struct CAG_NodeProperties& temp = it->second;
+          for (size_t i = 0; i < temp.edges.size(); i++) {
+            CAG_Node& from = temp.CAG_Node_id;
+            CAG_Node& to = temp.edges[i];
 
-      // remove all components with no outgoing edges
-      if (DEBUG_CONDITION) {
-        std::cout << std::endl
-                  << "remove all components with no outgoing edges:"
-                  << std::endl;
-      }
-      std::unordered_set<CAG_Node> roots_outgoing_edges_left;
-      for (auto it = has_outgoing_edges_left.cbegin();
-           it != has_outgoing_edges_left.cend(); ++it) {
-        roots_outgoing_edges_left.insert(CagFind(*it, cag));
-      }
-      for (auto it = cag.begin(); it != cag.end(); ++it) {
-        CAG_Node& CAG_Node = it->second.CAG_Node_id;
-        CagFind(CAG_Node, cag);
-      }
-      for (auto it = cag.cbegin(); it != cag.cend();) {
-        CAG_Node CAG_Node_id = it->second.CAG_Node_id;
-        CAG_Node current_root = it->second.pointing_to;
+            if (to == -1) continue;
 
-        auto find_it = roots_outgoing_edges_left.find(current_root);
-        if (find_it == roots_outgoing_edges_left.end()) {
-          if (DEBUG_CONDITION) {
-            std::cout << "└─removing CAG_Node_id " << CAG_Node_id
-                      << " because component has no outgoing edges. (root: "
-                      << current_root << " )" << std::endl;
+            // check if it's an outgoing edge, if yes, abort
+            auto it_to = cag.find(to);
+            if (it_to == cag.end()) {
+              if (DEBUG_CONDITION) {
+                std::cout << "└─detected outgoing edge from " << from << " to "
+                          << to << std::endl;
+              }
+              has_outgoing_edges_left.insert(temp.CAG_Node_id);
+              continue;
+            }
+
+            if (DEBUG_CONDITION) {
+              std::cout << "└─unioning " << from << " and " << to << std::endl;
+            }
+            CagDoUnion(from, to, cag);
+            to = -1;
           }
-          if (local_cc_size && CAG_Node_id >= lowest_local_CAG_Node_id &&
-              CAG_Node_id <= highest_local_CAG_Node_id) {
-            local_CAG_Nodes_pointer_table[CAG_Node_id].pointing_to =
-                current_root;
-          }else if(){
-
-          }
-          it = cag.erase(it);
-        } else {
-          ++it;
         }
-      }
 
-      if (DEBUG_CONDITION) {
-        std::cout << std::endl << "current cag:" << std::endl;
+        if (DEBUG_CONDITION) {
+          std::cout << std::endl << "current cag:" << std::endl;
+          for (auto it = cag.begin(); it != cag.end(); ++it) {
+            std::cout << "└─" << it->second.ToString() << std::endl;
+          }
+          std::cout << std::endl;
+        }
+
+        // remove all components with no outgoing edges
+        if (DEBUG_CONDITION) {
+          std::cout << std::endl
+                    << "remove all components with no outgoing edges:"
+                    << std::endl;
+        }
+        std::unordered_set<CAG_Node> roots_outgoing_edges_left;
+        for (auto it = has_outgoing_edges_left.cbegin();
+            it != has_outgoing_edges_left.cend(); ++it) {
+          roots_outgoing_edges_left.insert(CagFind(*it, cag));
+        }
         for (auto it = cag.begin(); it != cag.end(); ++it) {
-          std::cout << "└─" << it->second.ToString() << std::endl;
+          CAG_Node& CAG_Node = it->second.CAG_Node_id;
+          CagFind(CAG_Node, cag);
         }
-        std::cout << std::endl;
+        for (auto it = cag.cbegin(); it != cag.cend();) {
+          CAG_Node CAG_Node_id = it->second.CAG_Node_id;
+          CAG_Node current_root = it->second.pointing_to;
+
+          auto find_it = roots_outgoing_edges_left.find(current_root);
+          if (find_it == roots_outgoing_edges_left.end()) {
+            if (DEBUG_CONDITION) {
+              std::cout << "└─removing CAG_Node_id " << CAG_Node_id
+                        << " because component has no outgoing edges. (root: "
+                        << current_root << " )" << std::endl;
+            }
+            if (local_cc_size && CAG_Node_id >= lowest_local_CAG_Node_id &&
+                CAG_Node_id <= highest_local_CAG_Node_id) {
+              local_CAG_Nodes_pointer_table[CAG_Node_id].pointing_to =
+                  current_root;
+            }else if(remote_cc_size && CAG_Node_id >= lowest_remote_CAG_Node_id &&
+                CAG_Node_id <= highest_remote_CAG_Node_id){
+              remote_CAG_Nodes_pointer_table[CAG_Node_id].pointing_to =
+                  current_root;
+            }
+            it = cag.erase(it);
+          } else {
+            ++it;
+          }
+        }
+
+        if (DEBUG_CONDITION) {
+          std::cout << std::endl << "current cag:" << std::endl;
+          for (auto it = cag.begin(); it != cag.end(); ++it) {
+            std::cout << "└─" << it->second.ToString() << std::endl;
+          }
+          std::cout << std::endl;
+        }
+      }else{
+        for (size_t i = 0; i < received_compressed_cag.size();) {
+          int node = received_compressed_cag[i++];
+          int value = received_compressed_cag[i++];
+
+          local_CAG_Nodes_pointer_table[node].pointing_to = value;
+        }
       }
     }
   }
   if (sem("domain_overwrite")) {
+    if (cag.size() != 0){
+      std::cout << "CAG of block "<<std::to_string(blockID)<<" is not empty in the end!"<< std::endl;
+      assert(cag.size() == 0);
+    }
     for (auto l : layers) {
       for (auto c : m.Cells()) {
         if (fccl_new[l][c] != kClNone) {
-          (*fccl[l])[c] =
-              1 +
-              sin(local_CAG_Nodes_pointer_table[fccl_new[l][c]].pointing_to);
-          //(*fccl[l])[c] =
-          // local_CAG_Nodes_pointer_table[fccl_new[l][c]].pointing_to;
-          // if (DEBUG_CONDITION2) std::cout << "no kCLNone: " << fccl_new[l][c]
-          // << " " << local_CAG_Nodes_pointer_table[fccl_new[l][c]].pointing_to
-          // << std::endl;
+          (*fccl[l])[c] = local_CAG_Nodes_pointer_table[fccl_new[l][c]].pointing_to;
         } else {
           (*fccl[l])[c] = kClNone;
-          // if (DEBUG_CONDITION2) std::cout << "nothin" << std::endl;
         }
       }
     }
