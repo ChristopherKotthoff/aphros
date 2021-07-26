@@ -39,6 +39,8 @@ static int called_second_dump_ = 0;
 static int called_run_ = 0;
 static int called_main_ = 0;
 static bool use_new_recolor = false;
+static int file_prefix;
+static char config_letter;
 
 void Init(
     GRange<size_t> layers, Multi<FieldCell<Scal>>& fcu, std::string prefix,
@@ -127,9 +129,9 @@ void Run(M& m, Vars& var) {
   }
   if (sem.Nested()) {
     const bool verbose = false;
-    const bool reduce = true;
+    const bool reduce = false;
     const bool unionfind = false;
-    const bool grid = false;
+    const bool grid = true;
 
     if (use_new_recolor){
       RecolorDistributed(
@@ -141,12 +143,12 @@ void Run(M& m, Vars& var) {
         unionfind, reduce, grid, m);
     }
   }
-  if (sem.Nested()) {
+  /*if (sem.Nested()) {
     Dump(t.layers, t.fcvf, "vf", "vf", m);
   }
   if (sem.Nested()) {
     Dump(t.layers, t.fccl, "cl", "cl", m);
-  }
+  }*/
   if (sem()) {
     // Collect volume fractions and colors from all layers in one field.
     t.fcvf_sum.Reinit(m, 0);
@@ -160,16 +162,17 @@ void Run(M& m, Vars& var) {
       }
     }
   }
-  if (sem.Nested()) {
+  /*if (sem.Nested()) {
     Dump(t.fcvf_sum, "vf", "vf_sum", m);
   }
   if (sem.Nested()) {
     Dump(t.fccl_sum, "cl", "cl_sum", m);
-  }
+  }*/
   if (sem()) {
     int mpi_size;
     MPI_Comm_size(m.GetMpiComm(), &mpi_size);
-    m.TimerReport(std::to_string((std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count())%31536000)+"_timer_np"+std::to_string(mpi_size)+"_bx"+std::to_string(m.flags.global_blocks[0])+"by"+std::to_string(m.flags.global_blocks[1])+"bz"+std::to_string(m.flags.global_blocks[2])+"_bs"+std::to_string(m.GetInBlockCells().GetSize()[0])+"_new"+std::to_string(use_new_recolor?1:0)+".log");
+    std::string s(1,config_letter);
+    m.TimerReport(std::to_string(file_prefix)+"-"+s+"_timer_np"+std::to_string(mpi_size)+"_bx"+std::to_string(m.flags.global_blocks[0])+"by"+std::to_string(m.flags.global_blocks[1])+"bz"+std::to_string(m.flags.global_blocks[2])+"_bs"+std::to_string(m.GetInBlockCells().GetSize()[0])+"_new"+std::to_string(use_new_recolor?1:0)+".log");
   }
 }
 
@@ -191,6 +194,7 @@ int main(int argc, const char** argv) {
   parser.AddVariable<int>("--bs", 16).Help("Block size");
   parser.AddVariable<int>("--layers", 4).Help("Number of layers");
   parser.AddVariable<int>("--new_recolor", 1).Help("Use new recolor, 1 = true, 0 = false");
+  parser.AddVariable<int>("--file_prefix", 1).Help("chose file prefix");
   auto args = parser.ParseArgs(argc, argv);
   if (const int* p = args.Int.Find("EXIT")) {
     return *p;
@@ -198,6 +202,9 @@ int main(int argc, const char** argv) {
 
   if (args.Int["new_recolor"])
     use_new_recolor = true;
+
+  file_prefix = args.Int["file_prefix"];
+  config_letter = (args.String["config"])[0];
 
   std::stringstream conf;
 
