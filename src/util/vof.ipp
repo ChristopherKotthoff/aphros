@@ -1193,6 +1193,79 @@ void UVof<M_>::Recolor(
       unionfind, reduce, grid, m);
 }
 
+template <class M>
+class LabelingPropagation : public Labeling<M> {
+ public:
+  using Base = Labeling<M>;
+  using Conf = typename Base::Conf;
+  using Scal = typename M::Scal;
+  using Base::conf;
+  LabelingPropagation(const Conf& conf_, const M&) : Base(conf_) {}
+  ~LabelingPropagation() {}
+  void Recolor(
+      const GRange<size_t>& layers, const Multi<const FieldCell<Scal>*>& fcu,
+      const Multi<FieldCell<Scal>*>& fccl,
+      const Multi<const FieldCell<Scal>*>& fccl_stable,
+      const MapEmbed<BCond<Scal>>& mebc_cl, M& m) override {
+    UVof<M>::Imp::RecolorDirect(
+        layers, fcu, fccl, fccl_stable, conf.clfixed, conf.clfixed_x,
+        conf.coalth, mebc_cl, conf.verbose, conf.reduce, conf.grid, m);
+  }
+};
+
+template <class M>
+auto ModuleLabeling<M>::ParseConf(const Vars& var) -> Conf {
+  typename Labeling<M>::Conf conf;
+  conf.verbose = var.Int["vof_recolor_verbose"];
+  conf.reduce = var.Int["vof_recolor_reduce"];
+  conf.grid = var.Int["vof_recolor_grid"];
+  conf.coalth = var.Double["vofm_coalth"];
+  conf.clfixed = var.Double["clfixed"];
+  conf.clfixed_x = Vect(var.Vect["clfixed_x"]);
+  return conf;
+}
+
+template <class M>
+class ModuleLabelingPropagation : public ModuleLabeling<M> {
+ public:
+  using Conf = typename Labeling<M>::Conf;
+  ModuleLabelingPropagation() : ModuleLabeling<M>("propagation") {}
+  std::unique_ptr<Labeling<M>> Make(const Conf& conf, const M& m) override {
+    return std::make_unique<LabelingPropagation<M>>(conf, m);
+  }
+};
+
+
+template <class M>
+class LabelingUnionFind : public Labeling<M> {
+ public:
+  using Base = Labeling<M>;
+  using Conf = typename Base::Conf;
+  using Scal = typename M::Scal;
+  using Base::conf;
+  LabelingUnionFind(const Conf& conf_, const M&) : Base(conf_) {}
+  ~LabelingUnionFind() {}
+  void Recolor(
+      const GRange<size_t>& layers, const Multi<const FieldCell<Scal>*>& fcu,
+      const Multi<FieldCell<Scal>*>& fccl,
+      const Multi<const FieldCell<Scal>*>& fccl_stable,
+      const MapEmbed<BCond<Scal>>& mebc_cl, M& m) override {
+    UVof<M>::Imp::RecolorUnionFind(
+        layers, fcu, fccl, fccl_stable, conf.clfixed, conf.clfixed_x,
+        conf.coalth, mebc_cl, conf.verbose, conf.reduce, conf.grid, m);
+  }
+};
+
+template <class M>
+class ModuleLabelingUnionFind : public ModuleLabeling<M> {
+ public:
+  using Conf = typename Labeling<M>::Conf;
+  ModuleLabelingUnionFind() : ModuleLabeling<M>("unionfind") {}
+  std::unique_ptr<Labeling<M>> Make(const Conf& conf, const M& m) override {
+    return std::make_unique<LabelingUnionFind<M>>(conf, m);
+  }
+};
+
 template <class M_>
 auto UVof<M_>::GetAdvectionBc(
     const M& m, const MapEmbed<BCondAdvection<Scal>>& mfc)

@@ -68,6 +68,7 @@
 #include "util/stat.h"
 #include "util/sysinfo.h"
 #include "util/timer.h"
+#include "util/vof.h"
 
 #include "hydro.h"
 
@@ -81,17 +82,22 @@ Vect Sqrt(Vect v) {
 
 template <class M>
 void Hydro<M>::UpdateAdvectionPar() {
+  VofPar<M> par = ParseVofPar<M>(var);
   if (auto as = dynamic_cast<ASV*>(as_.get())) {
-    as->SetPar(ParsePar<ASV>()(var));
+    par.labeling = as->GetPar().labeling;
+    as->SetPar(par);
   }
   if (auto as = dynamic_cast<ASVM*>(as_.get())) {
-    as->SetPar(ParsePar<ASVM>()(var));
+    par.labeling = as->GetPar().labeling;
+    as->SetPar(par);
   }
   if (auto as = dynamic_cast<ASVEB*>(as_.get())) {
-    as->SetPar(ParsePar<ASVEB>()(var));
+    par.labeling = as->GetPar().labeling;
+    as->SetPar(par);
   }
   if (auto as = dynamic_cast<ASVMEB*>(as_.get())) {
-    as->SetPar(ParsePar<ASVMEB>()(var));
+    par.labeling = as->GetPar().labeling;
+    as->SetPar(par);
   }
 }
 template <class M>
@@ -629,33 +635,53 @@ void Hydro<M>::InitFluid(const FieldCell<Vect>& fc_vel) {
 template <class M>
 void Hydro<M>::InitAdvection(
     const FieldCell<Scal>& fcvf, const FieldCell<Scal>& fccl) {
-  std::string solver = var.String["advection_solver"];
+  const std::string solver = var.String["advection_solver"];
+
+  const auto modname = var.String["labeling"];
+  if (auto* mod = ModuleLabeling<M>::GetInstance(modname)) {
+    auto conf = ModuleLabeling<M>::ParseConf(var);
+    labeling_ = mod->Make(conf, m);
+  } else {
+    std::string known;
+    for (auto p : ModuleLabeling<M>::GetInstances()) {
+      if (!known.empty()) {
+        known += ", ";
+      }
+      known += p.first;
+    }
+    fassert(
+        false,
+        util::Format(
+            "Unknown module labeling='{}' for connected component labeling. "
+            "Known modules: {}",
+            modname, known));
+  }
+
+  auto par = ParseVofPar<M>(var);
+  par.labeling = labeling_.get();
+
   if (solver == "vof") {
     if (eb_) {
-      auto p = ParsePar<ASVEB>()(var);
       as_.reset(new ASVEB(
           m, *eb_, fcvf, fccl, mebc_adv_, &fs_->GetVolumeFlux(Step::time_curr),
-          &fc_src2_, 0., st_.dta, p));
+          &fc_src2_, 0., st_.dta, par));
     } else {
-      auto p = ParsePar<ASV>()(var);
       as_.reset(new ASV(
           m, m, fcvf, fccl, mebc_adv_, &fs_->GetVolumeFlux(Step::time_curr),
-          &fc_src2_, 0., st_.dta, p));
+          &fc_src2_, 0., st_.dta, par));
     }
     layers = GRange<size_t>(1);
   } else if (solver == "vofm") {
     if (eb_) {
-      auto p = ParsePar<ASVMEB>()(var);
       auto as = new ASVMEB(
           m, *eb_, fcvf, fccl, mebc_adv_, &fs_->GetVolumeFlux(Step::time_curr),
-          &fc_src2_, 0., st_.dta, p);
+          &fc_src2_, 0., st_.dta, par);
       as_.reset(as);
       layers = GRange<size_t>(as->GetNumLayers());
     } else {
-      auto p = ParsePar<ASVM>()(var);
       auto as = new ASVM(
           m, m, fcvf, fccl, mebc_adv_, &fs_->GetVolumeFlux(Step::time_curr),
-          &fc_src2_, 0., st_.dta, p);
+          &fc_src2_, 0., st_.dta, par);
       as_.reset(as);
       layers = GRange<size_t>(as->GetNumLayers());
     }
