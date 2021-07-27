@@ -20,3 +20,8 @@ bool kReg_propagation[] = {MULTIDIMX};
   RegisterModule<ModuleLabelingUnionFind<MeshCartesian<double, dim>>>(),
 bool kReg_unionfind[] = {MULTIDIMX};
 #undef X
+
+#define X(dim) \
+  RegisterModule<ModuleLabelingGraphContraction<MeshCartesian<double, dim>>>(),
+bool kReg_graph_contraction[] = {X(3)};
+#undef X

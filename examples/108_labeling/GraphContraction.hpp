@@ -142,7 +142,7 @@
 #define I fccl_new[ln][getCellFromIndex(index, ix + 1, iy + 1, iz - 1)]
 #define P fccl_new[ln][getCellFromIndex(index, ix - 1, iy - 1, iz)]
 #define Q fccl_new[ln][getCellFromIndex(index, ix, iy - 1, iz)]
-#define R fccl_new[ln][getCellFromIndex(index, ix + 1, iy - 1, iz)]
+#define CELL_R fccl_new[ln][getCellFromIndex(index, ix + 1, iy - 1, iz)]
 #define S fccl_new[ln][getCellFromIndex(index, ix - 1, iy, iz)]
 
 #define MERGE2(first, second)          \
@@ -273,7 +273,7 @@
                         MERGE2(C, D)                                           \
                       } else {                                                 \
                         if (useR && CONDITION_R) {                             \
-                          MERGE2(D, R)                                         \
+                          MERGE2(D, CELL_R)                                         \
                         } else {                                               \
                           Assign_D;                                            \
                         }                                                      \
@@ -283,7 +283,7 @@
                         MERGE3(C, D, I)                                        \
                       } else {                                                 \
                         if (useR && CONDITION_R) {                             \
-                          MERGE3(D, I, R)                                      \
+                          MERGE3(D, I, CELL_R)                                      \
                         } else {                                               \
                           MERGE2(D, I)                                         \
                         }                                                      \
@@ -294,7 +294,7 @@
                       MERGE2(C, D)                                             \
                     } else {                                                   \
                       if (useR && CONDITION_R) {                               \
-                        MERGE2(D, R)                                           \
+                        MERGE2(D, CELL_R)                                           \
                       } else {                                                 \
                         Assign_D;                                              \
                       }                                                        \
@@ -316,7 +316,7 @@
                           if (useF && CONDITION_F) {                           \
                             Assign_H;                                          \
                           } else {                                             \
-                            MERGE2(H, R)                                       \
+                            MERGE2(H, CELL_R)                                       \
                           }                                                    \
                         } else {                                               \
                           Assign_H;                                            \
@@ -334,7 +334,7 @@
                           if (useF && CONDITION_F) {                           \
                             MERGE2(A, H)                                       \
                           } else {                                             \
-                            MERGE3(A, H, R)                                    \
+                            MERGE3(A, H, CELL_R)                                    \
                           }                                                    \
                         } else {                                               \
                           MERGE2(A, H)                                         \
@@ -355,7 +355,7 @@
                             if (useF && CONDITION_F) {                         \
                               Assign_H;                                        \
                             } else {                                           \
-                              MERGE2(H, R)                                     \
+                              MERGE2(H, CELL_R)                                     \
                             }                                                  \
                                                                                \
                           } else {                                             \
@@ -374,7 +374,7 @@
                             if (useF && CONDITION_F) {                         \
                               MERGE2(H, P)                                     \
                             } else {                                           \
-                              MERGE3(H, P, R)                                  \
+                              MERGE3(H, P, CELL_R)                                  \
                             }                                                  \
                           } else {                                             \
                             MERGE2(H, P)                                       \
@@ -393,7 +393,7 @@
                           if (useF && CONDITION_F) {                           \
                             Assign_H;                                          \
                           } else {                                             \
-                            MERGE2(H, R)                                       \
+                            MERGE2(H, CELL_R)                                       \
                           }                                                    \
                         } else {                                               \
                           Assign_H;                                            \
@@ -436,7 +436,7 @@
                           MERGE3(C, I, S)                                      \
                         } else {                                               \
                           if (useR && CONDITION_R) {                           \
-                            MERGE3(I, R, S)                                    \
+                            MERGE3(I, CELL_R, S)                                    \
                           } else {                                             \
                             MERGE2(I, S)                                       \
                           }                                                    \
@@ -446,7 +446,7 @@
                           MERGE2(C, S)                                         \
                         } else {                                               \
                           if (useR && CONDITION_R) {                           \
-                            MERGE2(R, S)                                       \
+                            MERGE2(CELL_R, S)                                       \
                           } else {                                             \
                             Assign_S;                                          \
                           }                                                    \
@@ -472,15 +472,15 @@
                           if (useR && CONDITION_R) {                           \
                             if (useG && CONDITION_G) {                         \
                               if (useI && CONDITION_I) {                       \
-                                MERGE4(A, G, I, R)                             \
+                                MERGE4(A, G, I, CELL_R)                             \
                               } else {                                         \
-                                MERGE3(A, G, R)                                \
+                                MERGE3(A, G, CELL_R)                                \
                               }                                                \
                             } else {                                           \
                               if (useI && CONDITION_I) {                       \
-                                MERGE3(A, I, R)                                \
+                                MERGE3(A, I, CELL_R)                                \
                               } else {                                         \
-                                MERGE2(A, R)                                   \
+                                MERGE2(A, CELL_R)                                   \
                               }                                                \
                             }                                                  \
                           } else {                                             \
@@ -536,13 +536,13 @@
                             if (useI && CONDITION_I) {                         \
                               if (useP && CONDITION_P) {                       \
                                 if (useR && CONDITION_R) {                     \
-                                  MERGE4(G, I, P, R)                           \
+                                  MERGE4(G, I, P, CELL_R)                           \
                                 } else {                                       \
                                   MERGE3(G, I, P)                              \
                                 }                                              \
                               } else {                                         \
                                 if (useR && CONDITION_R) {                     \
-                                  MERGE3(G, I, R)                              \
+                                  MERGE3(G, I, CELL_R)                              \
                                 } else {                                       \
                                   MERGE2(G, I)                                 \
                                 }                                              \
@@ -550,13 +550,13 @@
                             } else {                                           \
                               if (useP && CONDITION_P) {                       \
                                 if (useR && CONDITION_R) {                     \
-                                  MERGE3(G, P, R)                              \
+                                  MERGE3(G, P, CELL_R)                              \
                                 } else {                                       \
                                   MERGE2(G, P)                                 \
                                 }                                              \
                               } else {                                         \
                                 if (useR && CONDITION_R) {                     \
-                                  MERGE2(G, R)                                 \
+                                  MERGE2(G, CELL_R)                                 \
                                 } else {                                       \
                                   Assign_G;                                    \
                                 }                                              \
@@ -566,13 +566,13 @@
                             if (useI && CONDITION_I) {                         \
                               if (useP && CONDITION_P) {                       \
                                 if (useR && CONDITION_R) {                     \
-                                  MERGE3(I, P, R)                              \
+                                  MERGE3(I, P, CELL_R)                              \
                                 } else {                                       \
                                   MERGE2(I, P)                                 \
                                 }                                              \
                               } else {                                         \
                                 if (useR && CONDITION_R) {                     \
-                                  MERGE2(I, R)                                 \
+                                  MERGE2(I, CELL_R)                                 \
                                 } else {                                       \
                                   Assign_I;                                    \
                                 }                                              \
@@ -580,7 +580,7 @@
                             } else {                                           \
                               if (useP && CONDITION_P) {                       \
                                 if (useR && CONDITION_R) {                     \
-                                  MERGE2(P, R)                                 \
+                                  MERGE2(P, CELL_R)                                 \
                                 } else {                                       \
                                   Assign_P;                                    \
                                 }                                              \
@@ -1374,18 +1374,18 @@ void CagDoUnion(
   }
 }
 
-void RecolorDistributed(
+void RecolorGraphContraction(
     const GRange<size_t>& layers, const Multi<const FieldCell<Scal>*>& fcu,
     const Multi<FieldCell<Scal>*>& fccl,
     const Multi<const FieldCell<Scal>*>& fccl_stable, Scal clfixed,
     Vect clfixed_x, Scal coalth, const MapEmbed<BCond<Scal>>& mfc, bool verb,
-    bool unionfind, bool reduce, bool grid, M& m) {
+    bool reduce, bool grid, M& m) {
   if (m.GetInBlockCells().GetSize()[0] != m.GetInBlockCells().GetSize()[1] || m.GetInBlockCells().GetSize()[1] != m.GetInBlockCells().GetSize()[2]){
     if (verb)
       std::cerr << "recolor: domain not 3D, taking standard iterative approach instead" << std::endl;
     UVof<M>().Recolor(
         layers, fcu, fccl, fccl_stable, clfixed, clfixed_x, coalth, mfc, verb,
-        unionfind, reduce, grid, m);
+        false, reduce, grid, m);
         return;
   }
 
@@ -1859,35 +1859,35 @@ if (DEBUG_CONDITION){
             recieved_cag.data(), recv_size, MPI_INT, i, 969, m.GetMpiComm(),
             MPI_STATUS_IGNORE);
 
-        int index = 0;
-        while (index < recv_size) {
-          int receiver_block = recieved_cag[index++];
+        int temp_index = 0;
+        while (temp_index < recv_size) {
+          int receiver_block = recieved_cag[temp_index++];
           auto& current_received_compressed_cag =
               *(receiver_cag_map.at(receiver_block));
 
           current_received_compressed_cag.clear();
 
           while (true) {
-            if (recieved_cag[index++] == -2) break;
+            if (recieved_cag[temp_index++] == -2) break;
 
-            current_received_compressed_cag.push_back(recieved_cag[index - 1]);
+            current_received_compressed_cag.push_back(recieved_cag[temp_index - 1]);
           }
         }
       }
 
       auto& recieved_cag = send_queue[mpi_rank_];
-      size_t index = 0;
-      while (index < recieved_cag.size()) {
-        int receiver_block = recieved_cag[index++];
+      size_t temp_index = 0;
+      while (temp_index < recieved_cag.size()) {
+        int receiver_block = recieved_cag[temp_index++];
         auto& current_received_compressed_cag =
             *(receiver_cag_map.at(receiver_block));
 
         current_received_compressed_cag.clear();
 
         while (true) {
-          if (recieved_cag[index++] == -2) break;
+          if (recieved_cag[temp_index++] == -2) break;
 
-          current_received_compressed_cag.push_back(recieved_cag[index - 1]);
+          current_received_compressed_cag.push_back(recieved_cag[temp_index - 1]);
         }
       }
 
@@ -1950,9 +1950,9 @@ if (DEBUG_CONDITION){
             }
 
             while (true) {
-              CAG_Node CAG_Node = received_compressed_cag[i++];
-              if (CAG_Node == -1) break;
-              temp.edges.push_back(CAG_Node);
+              CAG_Node node = received_compressed_cag[i++];
+              if (node == -1) break;
+              temp.edges.push_back(node);
             }
             if (DEBUG_CONDITION) {
               std::cout << "└─" << temp.ToString() << std::endl;
@@ -2022,8 +2022,8 @@ if (DEBUG_CONDITION){
           roots_outgoing_edges_left.insert(CagFind(*it, cag));
         }
         for (auto it = cag.begin(); it != cag.end(); ++it) {
-          CAG_Node& CAG_Node = it->second.CAG_Node_id;
-          CagFind(CAG_Node, cag);
+          CAG_Node& node = it->second.CAG_Node_id;
+          CagFind(node, cag);
         }
         for (auto it = cag.cbegin(); it != cag.cend();) {
           CAG_Node CAG_Node_id = it->second.CAG_Node_id;

@@ -22,7 +22,7 @@
 #include <util/format.h>
 #include <util/vof.h>
 
-#include "distri_CCL.hpp"
+#include "GraphContraction.hpp"
 
 #include <chrono> //for timing
 #include <time.h> 

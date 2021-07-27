@@ -24,6 +24,8 @@
 #include "solver/trackerm.h"
 #include "vof.h"
 
+#include "../examples/108_labeling/GraphContraction.hpp"
+
 template <class T>
 std::ostream& operator<<(std::ostream& o, const std::vector<T>& v) {
   std::string p = "";
@@ -1263,6 +1265,36 @@ class ModuleLabelingUnionFind : public ModuleLabeling<M> {
   ModuleLabelingUnionFind() : ModuleLabeling<M>("unionfind") {}
   std::unique_ptr<Labeling<M>> Make(const Conf& conf, const M& m) override {
     return std::make_unique<LabelingUnionFind<M>>(conf, m);
+  }
+};
+
+template <class M>
+class LabelingGraphContraction : public Labeling<M> {
+ public:
+  using Base = Labeling<M>;
+  using Conf = typename Base::Conf;
+  using Scal = typename M::Scal;
+  using Base::conf;
+  LabelingGraphContraction(const Conf& conf_, const M&) : Base(conf_) {}
+  ~LabelingGraphContraction() {}
+  void Recolor(
+      const GRange<size_t>& layers, const Multi<const FieldCell<Scal>*>& fcu,
+      const Multi<FieldCell<Scal>*>& fccl,
+      const Multi<const FieldCell<Scal>*>& fccl_stable,
+      const MapEmbed<BCond<Scal>>& mebc_cl, M& m) override {
+    RecolorGraphContraction(
+        layers, fcu, fccl, fccl_stable, conf.clfixed, conf.clfixed_x,
+        conf.coalth, mebc_cl, conf.verbose, conf.reduce, conf.grid, m);
+  }
+};
+
+template <class M>
+class ModuleLabelingGraphContraction : public ModuleLabeling<M> {
+ public:
+  using Conf = typename Labeling<M>::Conf;
+  ModuleLabelingGraphContraction() : ModuleLabeling<M>("graph_contraction") {}
+  std::unique_ptr<Labeling<M>> Make(const Conf& conf, const M& m) override {
+    return std::make_unique<LabelingGraphContraction<M>>(conf, m);
   }
 };
 
